@@ -1,0 +1,63 @@
+// ══════════════════════════════════════════════════════════════
+// utils/mailer.js
+// Weka faili hii kwenye folder ya utils/
+//
+// npm install nodemailer
+//
+// Ongeza kwenye .env yako:
+//   SMTP_HOST=smtp.gmail.com          (mfano — badilisha na provider wako)
+//   SMTP_PORT=587
+//   SMTP_SECURE=false                 (true kama port ni 465)
+//   SMTP_USER=your-email@gmail.com
+//   SMTP_PASS=your-app-password       (Gmail: tumia "App Password", si password ya kawaida)
+//   SMTP_FROM_NAME=RAM Project Management
+//   SMTP_FROM_EMAIL=your-email@gmail.com
+// ══════════════════════════════════════════════════════════════
+
+const nodemailer = require("nodemailer");
+
+const transporter = nodemailer.createTransport({
+  host: process.env.SMTP_HOST,
+  port: parseInt(process.env.SMTP_PORT || "587", 10),
+  secure: process.env.SMTP_SECURE === "true",
+  auth: {
+    user: process.env.SMTP_USER,
+    pass: process.env.SMTP_PASS,
+  },
+});
+
+// Kagua connection ipo sahihi wakati wa boot (hiari lakini husaidia debugging)
+transporter.verify((err) => {
+  if (err) {
+    console.error("❌ mailer.js: SMTP connection IMESHINDWA —", err.message);
+  } else {
+    console.log("✅ mailer.js: SMTP connection tayari, iko sahihi");
+  }
+});
+
+/**
+ * Tuma email ya barua (Letter) kwa recipient + CC
+ * @param {Object} opts
+ * @param {string} opts.to - email ya recipient
+ * @param {string[]} opts.cc - orodha ya emails za CC
+ * @param {string} opts.subject
+ * @param {string} opts.html - HTML content ya barua
+ * @param {Array} [opts.attachments] - [{ filename, path }]
+ */
+async function sendLetterEmail({ to, cc, subject, html, attachments }) {
+  const fromName = process.env.SMTP_FROM_NAME || "RAM Project Management";
+  const fromEmail = process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER;
+
+  const info = await transporter.sendMail({
+    from: `"${fromName}" <${fromEmail}>`,
+    to,
+    cc: cc && cc.length ? cc.join(", ") : undefined,
+    subject,
+    html,
+    attachments: attachments || [],
+  });
+
+  return info;
+}
+
+module.exports = { transporter, sendLetterEmail };
