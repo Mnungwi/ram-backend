@@ -31,6 +31,9 @@ const Project = sequelize.define(
     currency: { type: DataTypes.STRING(10), defaultValue: "TZS" },
     progress: { type: DataTypes.DECIMAL(5, 2), defaultValue: 0 },
     createdById: { type: DataTypes.UUID, allowNull: true },
+    showOnHomePage: { type: DataTypes.BOOLEAN, defaultValue: false },
+    visibility: { type: DataTypes.ENUM("public", "private"), defaultValue: "public" },
+    displayOrder: { type: DataTypes.INTEGER, defaultValue: 0 },
   },
   { tableName: "projects" },
 );

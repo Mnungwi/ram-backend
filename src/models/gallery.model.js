@@ -9,6 +9,8 @@ const ProjectGallery = sequelize.define(
     mediaId: { type: DataTypes.UUID, allowNull: false },
     displayOrder: { type: DataTypes.INTEGER, defaultValue: 0 },
     caption: { type: DataTypes.STRING(255), allowNull: true },
+    type: { type: DataTypes.STRING(50), defaultValue: 'photo' },
+    visibility: { type: DataTypes.ENUM('public', 'private'), defaultValue: 'public' },
   },
   {
     tableName: "project_gallery",

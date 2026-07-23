@@ -57,6 +57,7 @@ const uploadPath = path.join(
 );
 if (!fs.existsSync(uploadPath)) fs.mkdirSync(uploadPath, { recursive: true });
 app.use("/uploads", express.static(uploadPath));
+app.use("/uploads", express.static(path.join(uploadPath, "media")));
 
 // ─── Rate Limiting ────────────────────────────────────────────────────────────
 const limiter = rateLimit({
@@ -158,7 +159,7 @@ const start = async () => {
 
   const { runMigrations } = require("./migrations");
   await runMigrations();
-  await sequelize.sync();
+  await sequelize.sync({ alter: true });
 
   app.listen(PORT, () => {
     console.log(`\n🚀 Farida Projects API  →  http://localhost:${PORT}`);

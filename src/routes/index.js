@@ -12,6 +12,8 @@ router.get(
   roleCtrl.listPermissions,
 );
 
+router.use("/public", require("./public.routes"));
+router.use("/admin-website", require("./admin-website.routes"));
 router.use("/auth", require("./auth.routes"));
 router.use("/users", require("./users.routes"));
 router.use("/roles", require("./roles.routes"));
