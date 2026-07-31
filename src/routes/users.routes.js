@@ -11,6 +11,16 @@ userRouter.get("/:userId", authorize(P.USER_VIEW), userCtrl.getUser);
 userRouter.put("/:userId", authorize(P.USER_UPDATE), userCtrl.updateUser);
 userRouter.delete("/:userId", authorize(P.USER_DELETE), userCtrl.deleteUser);
 userRouter.post(
+  "/:userId/activate",
+  authorize(P.USER_ACTIVATE),
+  userCtrl.activateUser,
+);
+userRouter.post(
+  "/:userId/reset-password",
+  authorize(P.USER_RESET_PASSWORD),
+  userCtrl.adminResetPassword,
+);
+userRouter.post(
   "/:userId/roles",
   authorize(P.USER_ASSIGN_ROLE),
   userCtrl.assignRoles,

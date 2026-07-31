@@ -18,9 +18,10 @@ const UPLOADS_ROOT = path.join(process.cwd(), "uploads");
 const DOCUMENTS_DIR = path.join(UPLOADS_ROOT, "documents");
 const LETTERS_DIR = path.join(UPLOADS_ROOT, "letters");
 const MEDIA_DIR = path.join(UPLOADS_ROOT, "media");
+const AVATARS_DIR = path.join(UPLOADS_ROOT, "avatars");
 
 // Hakikisha folders zote zipo
-[UPLOADS_ROOT, DOCUMENTS_DIR, LETTERS_DIR, MEDIA_DIR].forEach((dir) => {
+[UPLOADS_ROOT, DOCUMENTS_DIR, LETTERS_DIR, MEDIA_DIR, AVATARS_DIR].forEach((dir) => {
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
     console.log(`✅ uploadPaths.js: imeunda folder ${dir}`);
@@ -30,5 +31,6 @@ const MEDIA_DIR = path.join(UPLOADS_ROOT, "media");
 console.log("📁 uploadPaths.js: DOCUMENTS_DIR =", DOCUMENTS_DIR);
 console.log("📁 uploadPaths.js: LETTERS_DIR   =", LETTERS_DIR);
 console.log("📁 uploadPaths.js: MEDIA_DIR     =", MEDIA_DIR);
+console.log("📁 uploadPaths.js: AVATARS_DIR   =", AVATARS_DIR);
 
-module.exports = { UPLOADS_ROOT, DOCUMENTS_DIR, LETTERS_DIR, MEDIA_DIR };
+module.exports = { UPLOADS_ROOT, DOCUMENTS_DIR, LETTERS_DIR, MEDIA_DIR, AVATARS_DIR };

@@ -11,7 +11,7 @@ const OfficialLetter = sequelize.define(
     senderId: { type: DataTypes.UUID, allowNull: true },
     recipientId: { type: DataTypes.UUID, allowNull: true },
 
-    letterNo: { type: DataTypes.STRING(50), allowNull: true, unique: true },
+    letterNo: { type: DataTypes.STRING(50), allowNull: true, unique: 'letters_no_unique' },
     subject: { type: DataTypes.STRING(500), allowNull: false },
     subTitle: { type: DataTypes.STRING(500), allowNull: true },
     body: { type: DataTypes.TEXT("long"), allowNull: false },

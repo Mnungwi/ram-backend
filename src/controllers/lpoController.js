@@ -4,7 +4,7 @@ const {
   LPOComment,
 } = require("../models/lpo.model");
 const { Requisition, RequisitionItem } = require("../models/requisition.model");
-const { User, Supplier, Project } = require("../models/index");
+const { User, Supplier, Project, Activity } = require("../models/index");
 const {
   successResponse,
   errorResponse,
@@ -153,7 +153,9 @@ exports.createLPO = async (req, res, next) => {
     if (!supplier) return errorResponse(res, "Supplier not found", 404);
 
     if (!activityId) return errorResponse(res, "Activity is required", 400);
-    const activity = await Activity.findOne({ where: { id: activityId, projectId } });
+    const activity = await Activity.findOne({
+      where: { id: activityId, projectId: req.params.projectId },
+    });
     if (!activity) return errorResponse(res, "Activity not found for this project", 404);
 
     const itemsWithAmount = items.map((item, idx) => ({

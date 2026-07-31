@@ -10,7 +10,7 @@ const LocalPurchaseOrder = sequelize.define(
       defaultValue: DataTypes.UUIDV4,
       primaryKey: true,
     },
-    lpoNo: { type: DataTypes.STRING(50), allowNull: false, unique: true },
+    lpoNo: { type: DataTypes.STRING(50), allowNull: false, unique: 'lpo_no_unique' },
     projectId: { type: DataTypes.UUID, allowNull: false },
     activityId: { type: DataTypes.UUID, allowNull: false },
     requisitionId: { type: DataTypes.UUID, allowNull: true },

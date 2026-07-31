@@ -128,7 +128,7 @@ const ExpenseCategory = sequelize.define(
       defaultValue: DataTypes.UUIDV4,
       primaryKey: true,
     },
-    name: { type: DataTypes.STRING(100), allowNull: false, unique: true }, // e.g. Transport, Fuel, Office Supplies
+    name: { type: DataTypes.STRING(100), allowNull: false, unique: 'expense_categories_name_unique' }, // e.g. Transport, Fuel, Office Supplies
     isActive: { type: DataTypes.BOOLEAN, defaultValue: true },
   },
   { tableName: "expense_categories" },

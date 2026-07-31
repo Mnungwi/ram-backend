@@ -60,4 +60,25 @@ async function sendLetterEmail({ to, cc, subject, html, attachments }) {
   return info;
 }
 
-module.exports = { transporter, sendLetterEmail };
+/**
+ * Tuma email ya kawaida (generic) — inatumika kwa password reset, OTP, n.k.
+ * @param {Object} opts
+ * @param {string} opts.to
+ * @param {string} opts.subject
+ * @param {string} opts.html
+ */
+async function sendMail({ to, subject, html }) {
+  const fromName = process.env.SMTP_FROM_NAME || "RAM Project Management";
+  const fromEmail = process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER;
+
+  const info = await transporter.sendMail({
+    from: `"${fromName}" <${fromEmail}>`,
+    to,
+    subject,
+    html,
+  });
+
+  return info;
+}
+
+module.exports = { transporter, sendLetterEmail, sendMail };

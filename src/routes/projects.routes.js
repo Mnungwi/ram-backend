@@ -652,6 +652,29 @@ router.delete(
   techCtrl.removeTechnicianFromProject,
 );
 
+// ── Project Storekeepers ──────────────────────────────────
+const storekeeperCtrl = require("../controllers/storekeeperController");
+router.get(
+  "/:projectId/storekeepers",
+  authorize(P.PROJECT_VIEW),
+  storekeeperCtrl.listProjectStorekeepers,
+);
+router.post(
+  "/:projectId/storekeepers",
+  authorize(P.PROJECT_CREATE),
+  storekeeperCtrl.assignStorekeeperToProject,
+);
+router.put(
+  "/:projectId/storekeepers/:assignmentId",
+  authorize(P.PROJECT_UPDATE),
+  storekeeperCtrl.updateProjectStorekeeper,
+);
+router.delete(
+  "/:projectId/storekeepers/:assignmentId",
+  authorize(P.PROJECT_DELETE),
+  storekeeperCtrl.removeStorekeeperFromProject,
+);
+
 // ── Technician Receipts ───────────────────────────────────
 router.get(
   "/:projectId/technician-receipts",

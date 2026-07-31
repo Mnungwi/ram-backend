@@ -1,8 +1,10 @@
 const { Op } = require('sequelize');
+const crypto = require('crypto');
 const { User, Role, Permission, UserRole, UserPermission } = require('../models/index');
 const { resolveUserPermissions } = require('../utils/permissionResolver');
 const { successResponse, errorResponse, paginatedResponse, getPagination } = require('../utils/response');
 const { audit } = require('../utils/audit');
+const { sendMail } = require('../utils/mailer');
 
 const listUsers = async (req, res, next) => {
   try {
@@ -104,6 +106,65 @@ const deleteUser = async (req, res, next) => {
   }
 };
 
+const activateUser = async (req, res, next) => {
+  try {
+    const user = await User.findByPk(req.params.userId);
+    if (!user) return errorResponse(res, 'User not found', 404);
+
+    await User.update({ isActive: true }, { where: { id: req.params.userId } });
+    await audit({ userId: req.userId, action: 'activate_user', resource: 'user', resourceId: req.params.userId, req });
+    return successResponse(res, { user: await User.findByPk(req.params.userId) }, 'User activated');
+  } catch (err) {
+    next(err);
+  }
+};
+
+// Admin-triggered password reset — generates a temporary password, forces the
+// user to change it on next login, and emails it to them.
+const adminResetPassword = async (req, res, next) => {
+  try {
+    const { userId } = req.params;
+    const user = await User.unscoped().findOne({ where: { id: userId } });
+    if (!user) return errorResponse(res, 'User not found', 404);
+
+    const tempPassword = crypto.randomBytes(6).toString('base64url'); // e.g. "aZ3-k9Qp2x"
+
+    await User.update(
+      { password: tempPassword, mustChangePassword: true, refreshToken: null },
+      { where: { id: userId }, individualHooks: true },
+    );
+
+    let emailSent = false;
+    try {
+      await sendMail({
+        to: user.email,
+        subject: 'Your RAM Project Management password has been reset',
+        html: `
+          <p>Hi ${user.firstName},</p>
+          <p>An administrator has reset your password. Your temporary password is:</p>
+          <p style="font-size:18px;font-weight:bold;letter-spacing:1px">${tempPassword}</p>
+          <p>You will be required to set a new password the next time you log in.</p>
+        `,
+      });
+      emailSent = true;
+    } catch (mailErr) {
+      console.error('adminResetPassword: failed to send email —', mailErr.message);
+    }
+
+    await audit({ userId: req.userId, action: 'admin_reset_password', resource: 'user', resourceId: userId, req });
+
+    return successResponse(
+      res,
+      { emailSent, ...(emailSent ? {} : { tempPassword }) },
+      emailSent
+        ? 'Temporary password generated and emailed to the user'
+        : 'Temporary password generated, but email delivery failed — share it with the user manually',
+    );
+  } catch (err) {
+    next(err);
+  }
+};
+
 // ─── ROLE ASSIGNMENT ──────────────────────────────────────────────────────────
 
 const assignRoles = async (req, res, next) => {
@@ -179,6 +240,6 @@ const getUserPermissions = async (req, res, next) => {
 };
 
 module.exports = {
-  listUsers, getUser, createUser, updateUser, deleteUser,
+  listUsers, getUser, createUser, updateUser, deleteUser, activateUser, adminResetPassword,
   assignRoles, setDirectPermissions, getUserPermissions,
 };

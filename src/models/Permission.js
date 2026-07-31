@@ -10,7 +10,7 @@ const Permission = sequelize.define('Permission', {
   name: {
     type: DataTypes.STRING(200),
     allowNull: false,
-    unique: true,
+    unique: 'permissions_name_unique',
     validate: { notEmpty: true },
     comment: 'e.g. project:create',
   },

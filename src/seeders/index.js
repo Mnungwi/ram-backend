@@ -12,6 +12,7 @@ const ROLES = [
   { name: 'Site Engineer',   slug: 'site_engineer',   description: 'Field-level access. Creates activities and reports.',  isSystem: true, color: '#16a34a' },
   { name: 'Quantity Surveyor', slug: 'quantity_surveyor', description: 'Procurement and budget management.',              isSystem: true, color: '#ca8a04' },
   { name: 'Finance Officer', slug: 'finance_officer', description: 'Finance, invoices, payments and budget.',              isSystem: true, color: '#0891b2' },
+  { name: 'Storekeeper',     slug: 'storekeeper',     description: 'Manages project store inventory, receiving and issuing of materials.', isSystem: true, color: '#ea580c' },
   { name: 'Viewer',          slug: 'viewer',          description: 'Read-only access to assigned projects.',              isSystem: true, color: '#6b7280' },
 ];
 

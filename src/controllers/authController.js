@@ -1,9 +1,47 @@
 const { body } = require('express-validator');
+const crypto = require('crypto');
+const bcrypt = require('bcryptjs');
+const { Op } = require('sequelize');
 const { User, Role, UserRole } = require('../models/index');
 const { generateTokenPair, verifyRefreshToken } = require('../utils/jwt');
 const { resolveUserPermissions } = require('../utils/permissionResolver');
 const { successResponse, errorResponse } = require('../utils/response');
 const { audit } = require('../utils/audit');
+const { sendMail } = require('../utils/mailer');
+
+// Login OTP (email 2FA step) — off by default so local/dev environments
+// without working SMTP aren't locked out. Set OTP_LOGIN_ENABLED=true once
+// SMTP is configured to require it for every login (admin + mobile).
+const OTP_LOGIN_ENABLED = process.env.OTP_LOGIN_ENABLED === 'true';
+const OTP_TTL_MS = 10 * 60 * 1000; // 10 minutes
+const OTP_MAX_ATTEMPTS = 5;
+
+const generateAndSendOtp = async (user) => {
+  const code = String(crypto.randomInt(100000, 999999)); // 6-digit
+  const hashedCode = await bcrypt.hash(code, 10);
+
+  await User.update(
+    { otpCode: hashedCode, otpExpiresAt: new Date(Date.now() + OTP_TTL_MS), otpAttempts: 0 },
+    { where: { id: user.id } },
+  );
+
+  try {
+    await sendMail({
+      to: user.email,
+      subject: 'Your RAM Project Management login code',
+      html: `
+        <p>Hi ${user.firstName},</p>
+        <p>Your login verification code is:</p>
+        <p style="font-size:24px;font-weight:bold;letter-spacing:4px">${code}</p>
+        <p>This code expires in 10 minutes. If you did not try to log in, you can ignore this email.</p>
+      `,
+    });
+    return true;
+  } catch (mailErr) {
+    console.error('generateAndSendOtp: failed to send OTP email —', mailErr.message);
+    return false;
+  }
+};
 
 // ─── VALIDATION RULES ────────────────────────────────────────────────────────
 
@@ -66,6 +104,18 @@ const login = async (req, res, next) => {
       return errorResponse(res, 'Invalid email or password', 401);
     }
 
+    if (OTP_LOGIN_ENABLED) {
+      const emailSent = await generateAndSendOtp(user);
+      await audit({ userId: user.id, action: 'login_otp_requested', resource: 'user', resourceId: user.id, req });
+      return successResponse(res, {
+        requiresOtp: true,
+        email: user.email,
+        emailSent,
+      }, emailSent
+        ? 'Verification code sent to your email'
+        : 'Verification code generated, but the email could not be sent — contact an administrator');
+    }
+
     const { accessToken, refreshToken } = generateTokenPair(user);
 
     await User.update(
@@ -89,6 +139,72 @@ const login = async (req, res, next) => {
       accessToken,
       refreshToken,
     }, 'Login successful');
+  } catch (err) {
+    next(err);
+  }
+};
+
+const verifyOtp = async (req, res, next) => {
+  try {
+    const { email, otp } = req.body;
+    if (!email || !otp) return errorResponse(res, 'email and otp are required', 400);
+
+    const user = await User.scope('withOtp').findOne({ where: { email, isActive: true } });
+    if (!user || !user.otpCode) {
+      return errorResponse(res, 'No pending login verification for this account', 400);
+    }
+
+    if (!user.otpExpiresAt || user.otpExpiresAt < new Date()) {
+      return errorResponse(res, 'Verification code has expired, please log in again', 400);
+    }
+
+    if (user.otpAttempts >= OTP_MAX_ATTEMPTS) {
+      return errorResponse(res, 'Too many incorrect attempts, please log in again', 429);
+    }
+
+    const isMatch = await user.compareOtp(otp);
+    if (!isMatch) {
+      await User.update({ otpAttempts: user.otpAttempts + 1 }, { where: { id: user.id } });
+      return errorResponse(res, 'Incorrect verification code', 400);
+    }
+
+    const { accessToken, refreshToken } = generateTokenPair(user);
+
+    await User.update(
+      { refreshToken, lastLoginAt: new Date(), otpCode: null, otpExpiresAt: null, otpAttempts: 0 },
+      { where: { id: user.id } },
+    );
+
+    const userWithRoles = await User.findByPk(user.id, {
+      include: [{ model: Role, as: 'roles', through: { attributes: [] } }],
+    });
+    const perms = await resolveUserPermissions(user.id);
+
+    await audit({ userId: user.id, action: 'login', resource: 'user', resourceId: user.id, req });
+
+    return successResponse(res, {
+      user: userWithRoles,
+      permissions: Array.from(perms),
+      accessToken,
+      refreshToken,
+    }, 'Login successful');
+  } catch (err) {
+    next(err);
+  }
+};
+
+const resendOtp = async (req, res, next) => {
+  try {
+    const { email } = req.body;
+    if (!email) return errorResponse(res, 'Email is required', 400);
+
+    const user = await User.findOne({ where: { email, isActive: true } });
+    if (!user) return successResponse(res, null, 'If that account exists, a new code has been sent.');
+
+    const emailSent = await generateAndSendOtp(user);
+    return successResponse(res, { emailSent }, emailSent
+      ? 'A new verification code has been sent to your email'
+      : 'Could not send the verification email — contact an administrator');
   } catch (err) {
     next(err);
   }
@@ -159,6 +275,21 @@ const updateProfile = async (req, res, next) => {
   }
 };
 
+const uploadAvatar = async (req, res, next) => {
+  try {
+    if (!req.file) return errorResponse(res, 'No image file uploaded', 400);
+
+    const avatarUrl = `/uploads/avatars/${req.file.filename}`;
+    await User.update({ avatar: avatarUrl }, { where: { id: req.userId } });
+    const updated = await User.findByPk(req.userId);
+
+    await audit({ userId: req.userId, action: 'update_avatar', resource: 'user', resourceId: req.userId, req });
+    return successResponse(res, { user: updated, avatar: avatarUrl }, 'Profile picture updated');
+  } catch (err) {
+    next(err);
+  }
+};
+
 const changePassword = async (req, res, next) => {
   try {
     const { currentPassword, newPassword } = req.body;
@@ -167,7 +298,12 @@ const changePassword = async (req, res, next) => {
     const isMatch = await user.comparePassword(currentPassword);
     if (!isMatch) return errorResponse(res, 'Current password is incorrect', 400);
 
-    await User.update({ password: newPassword }, { where: { id: req.userId } });
+    // NOTE: individualHooks is required so the beforeUpdate hook (bcrypt hashing)
+    // actually runs — Sequelize's static/bulk .update() skips instance hooks otherwise.
+    await User.update(
+      { password: newPassword, mustChangePassword: false },
+      { where: { id: req.userId }, individualHooks: true },
+    );
     await audit({ userId: req.userId, action: 'change_password', resource: 'user', resourceId: req.userId, req });
     return successResponse(res, null, 'Password changed successfully');
   } catch (err) {
@@ -175,4 +311,92 @@ const changePassword = async (req, res, next) => {
   }
 };
 
-module.exports = { register, login, refresh, logout, getProfile, updateProfile, changePassword, registerRules, loginRules };
+// ─── FORGOT / RESET PASSWORD ───────────────────────────────────────────────────
+
+const forgotPassword = async (req, res, next) => {
+  try {
+    const { email } = req.body;
+    if (!email) return errorResponse(res, 'Email is required', 400);
+
+    const user = await User.unscoped().findOne({ where: { email, isActive: true } });
+    // Always respond with the same message, whether or not the email exists,
+    // so this endpoint can't be used to enumerate registered accounts.
+    const genericMessage = 'If that email is registered, a password reset link has been sent.';
+    if (!user) return successResponse(res, null, genericMessage);
+
+    const rawToken = crypto.randomBytes(32).toString('hex');
+    const hashedToken = crypto.createHash('sha256').update(rawToken).digest('hex');
+
+    await User.update(
+      {
+        passwordResetToken: hashedToken,
+        passwordResetExpires: new Date(Date.now() + 60 * 60 * 1000), // 1 hour
+      },
+      { where: { id: user.id } },
+    );
+
+    const resetUrl = `${process.env.APP_URL || 'http://localhost:4200'}/reset-password?token=${rawToken}&email=${encodeURIComponent(email)}`;
+
+    try {
+      await sendMail({
+        to: email,
+        subject: 'Reset your RAM Project Management password',
+        html: `
+          <p>Hi ${user.firstName},</p>
+          <p>We received a request to reset your password. This link expires in 1 hour.</p>
+          <p><a href="${resetUrl}">Reset your password</a></p>
+          <p>If you did not request this, you can safely ignore this email.</p>
+        `,
+      });
+    } catch (mailErr) {
+      console.error('forgotPassword: failed to send reset email —', mailErr.message);
+    }
+
+    await audit({ userId: user.id, action: 'forgot_password_request', resource: 'user', resourceId: user.id, req });
+    return successResponse(res, null, genericMessage);
+  } catch (err) {
+    next(err);
+  }
+};
+
+const resetPassword = async (req, res, next) => {
+  try {
+    const { email, token, newPassword } = req.body;
+    if (!email || !token || !newPassword) {
+      return errorResponse(res, 'email, token and newPassword are required', 400);
+    }
+
+    const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
+    const user = await User.unscoped().findOne({
+      where: {
+        email,
+        passwordResetToken: hashedToken,
+        passwordResetExpires: { [Op.gt]: new Date() },
+      },
+    });
+
+    if (!user) return errorResponse(res, 'Invalid or expired reset link', 400);
+
+    await User.update(
+      {
+        password: newPassword,
+        mustChangePassword: false,
+        passwordResetToken: null,
+        passwordResetExpires: null,
+        refreshToken: null, // force re-login everywhere
+      },
+      { where: { id: user.id }, individualHooks: true },
+    );
+
+    await audit({ userId: user.id, action: 'reset_password', resource: 'user', resourceId: user.id, req });
+    return successResponse(res, null, 'Password has been reset. You can now log in.');
+  } catch (err) {
+    next(err);
+  }
+};
+
+module.exports = {
+  register, login, verifyOtp, resendOtp, refresh, logout, getProfile, updateProfile, uploadAvatar, changePassword,
+  forgotPassword, resetPassword,
+  registerRules, loginRules,
+};

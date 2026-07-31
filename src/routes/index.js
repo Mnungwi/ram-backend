@@ -28,6 +28,7 @@ router.use("/products", require("./products.routes"));
 router.use("/units", require("./units.routes"));
 router.use("/store/central", require("./central.store.routes"));
 router.use("/technicians", require("./technicians.routes"));
+router.use("/storekeepers", require("./storekeepers.routes"));
 router.use("/projects", require("./projects.routes"));
 router.use("/media", require("./media.routes"));
 router.use("/", require("./gallery.routes"));

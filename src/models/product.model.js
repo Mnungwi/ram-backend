@@ -10,7 +10,7 @@ const ProductCategory = sequelize.define(
       defaultValue: DataTypes.UUIDV4,
       primaryKey: true,
     },
-    name: { type: DataTypes.STRING(100), allowNull: false, unique: true },
+    name: { type: DataTypes.STRING(100), allowNull: false, unique: 'product_categories_name_unique' },
     description: { type: DataTypes.TEXT, allowNull: true },
     isActive: { type: DataTypes.BOOLEAN, defaultValue: true },
   },
@@ -28,7 +28,7 @@ const Product = sequelize.define(
     },
     categoryId: { type: DataTypes.UUID, allowNull: true },
     name: { type: DataTypes.STRING(255), allowNull: false },
-    code: { type: DataTypes.STRING(50), allowNull: true, unique: true }, // e.g. PRD-001
+    code: { type: DataTypes.STRING(50), allowNull: true, unique: 'products_code_unique' }, // e.g. PRD-001
     description: { type: DataTypes.TEXT, allowNull: true },
     unitId: { type: DataTypes.UUID, allowNull: true }, // e.g. Litres, Kg, Bags, Tonne
     purchaseUnit: { type: DataTypes.STRING(50), allowNull: true }, // e.g. Ton, Roll, Box

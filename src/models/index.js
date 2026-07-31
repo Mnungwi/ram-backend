@@ -24,6 +24,7 @@ const { Document, DocumentVersion } = require("./document.model");
 const { Media } = require("./media.model");
 const { ProjectGallery } = require("./gallery.model");
 const { Technician, TechnicianCategory, TechnicianReceipt, ProjectTechnician } = require("./technician.model");
+const { ProjectStorekeeper } = require("./storekeeper.model");
 
 // ─── JUNCTION TABLES ──────────────────────────────────────────────────────────
 
@@ -225,6 +226,13 @@ TechnicianReceipt.belongsTo(User, { foreignKey: "issuedById", as: "issuedBy" });
 TechnicianReceipt.belongsTo(Project, { foreignKey: "projectId", as: "project" });
 ProjectTechnician.belongsTo(Project, { foreignKey: "projectId", as: "project" });
 
+// ─── PROJECT STOREKEEPER ASSOCIATIONS ───────────────────────────────────────
+Project.hasMany(ProjectStorekeeper, { foreignKey: "projectId", as: "storekeepers" });
+ProjectStorekeeper.belongsTo(Project, { foreignKey: "projectId", as: "project" });
+ProjectStorekeeper.belongsTo(User, { foreignKey: "userId", as: "user" });
+ProjectStorekeeper.belongsTo(User, { foreignKey: "assignedById", as: "assignedBy" });
+User.hasMany(ProjectStorekeeper, { foreignKey: "userId", as: "storekeeperAssignments" });
+
 module.exports = {
   sequelize,
   User,
@@ -263,4 +271,5 @@ module.exports = {
   TechnicianCategory,
   TechnicianReceipt,
   ProjectTechnician,
+  ProjectStorekeeper,
 };

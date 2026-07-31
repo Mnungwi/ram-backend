@@ -13,7 +13,7 @@ const Requisition = sequelize.define(
     requisitionNo: {
       type: DataTypes.STRING(50),
       allowNull: false,
-      unique: true,
+      unique: 'requisitions_no_unique',
     },
     projectId: { type: DataTypes.UUID, allowNull: false },
     siteLocation: { type: DataTypes.STRING(255), allowNull: true },

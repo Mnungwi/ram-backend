@@ -5,7 +5,16 @@ const {
 } = require("../models/store.model");
 const { Requisition, RequisitionItem } = require("../models/requisition.model");
 const { LocalPurchaseOrder, LPOItem } = require("../models/lpo.model");
-const { User } = require("../models/index");
+const { User, Product, Unit } = require("../models/index");
+
+const PRODUCT_INCLUDE = [
+  {
+    model: Product,
+    as: "product",
+    attributes: ["id", "name", "code"],
+    include: [{ model: Unit, as: "uom", attributes: ["id", "name", "abbreviation"] }],
+  },
+];
 const {
   successResponse,
   errorResponse,
@@ -27,6 +36,7 @@ exports.listProjectStore = async (req, res, next) => {
     if (search) where.description = { [Op.like]: `%${search}%` };
     const items = await ProjectStoreItem.findAll({
       where,
+      include: PRODUCT_INCLUDE,
       order: [["description", "ASC"]],
     });
     return successResponse(res, { items });
@@ -490,6 +500,7 @@ exports.listCentralStore = async (req, res, next) => {
     if (search) where.description = { [Op.like]: `%${search}%` };
     const items = await CentralStoreItem.findAll({
       where,
+      include: PRODUCT_INCLUDE,
       order: [["description", "ASC"]],
     });
     return successResponse(res, { items });

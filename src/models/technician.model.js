@@ -10,7 +10,7 @@ const TechnicianCategory = sequelize.define(
       defaultValue: DataTypes.UUIDV4,
       primaryKey: true,
     },
-    name: { type: DataTypes.STRING(100), allowNull: false, unique: true }, // e.g. Fundi Maji, Umeme, Ujenzi
+    name: { type: DataTypes.STRING(100), allowNull: false, unique: 'technician_categories_name_unique' }, // e.g. Fundi Maji, Umeme, Ujenzi
     isActive: { type: DataTypes.BOOLEAN, defaultValue: true },
   },
   { tableName: "technician_categories" },

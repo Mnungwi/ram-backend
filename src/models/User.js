@@ -21,7 +21,7 @@ const User = sequelize.define('User', {
   email: {
     type: DataTypes.STRING(255),
     allowNull: false,
-    unique: true,
+    unique: 'users_email_unique',
     validate: { isEmail: true },
   },
   password: {
@@ -73,6 +73,22 @@ const User = sequelize.define('User', {
     type: DataTypes.DATE,
     allowNull: true,
   },
+  mustChangePassword: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: false,
+  },
+  otpCode: {
+    type: DataTypes.STRING(255),
+    allowNull: true,
+  },
+  otpExpiresAt: {
+    type: DataTypes.DATE,
+    allowNull: true,
+  },
+  otpAttempts: {
+    type: DataTypes.INTEGER,
+    defaultValue: 0,
+  },
 }, {
   tableName: 'users',
   hooks: {
@@ -89,16 +105,22 @@ const User = sequelize.define('User', {
     },
   },
   defaultScope: {
-    attributes: { exclude: ['password', 'refreshToken', 'passwordResetToken', 'passwordResetExpires'] },
+    attributes: { exclude: ['password', 'refreshToken', 'passwordResetToken', 'passwordResetExpires', 'otpCode', 'otpExpiresAt', 'otpAttempts'] },
   },
   scopes: {
     withPassword: { attributes: {} },
     withTokens:   { attributes: {} },
+    withOtp:      { attributes: {} },
   },
 });
 
 User.prototype.comparePassword = async function (candidatePassword) {
   return bcrypt.compare(candidatePassword, this.password);
+};
+
+User.prototype.compareOtp = async function (candidateOtp) {
+  if (!this.otpCode) return false;
+  return bcrypt.compare(candidateOtp, this.otpCode);
 };
 
 User.prototype.toJSON = function () {
@@ -107,6 +129,9 @@ User.prototype.toJSON = function () {
   delete values.refreshToken;
   delete values.passwordResetToken;
   delete values.passwordResetExpires;
+  delete values.otpCode;
+  delete values.otpExpiresAt;
+  delete values.otpAttempts;
   return values;
 };
 

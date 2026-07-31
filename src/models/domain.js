@@ -10,7 +10,7 @@ const Project = sequelize.define(
       defaultValue: DataTypes.UUIDV4,
       primaryKey: true,
     },
-    projectCode: { type: DataTypes.STRING(50), allowNull: false, unique: true },
+    projectCode: { type: DataTypes.STRING(50), allowNull: false, unique: 'projects_code_unique' },
     name: { type: DataTypes.STRING(255), allowNull: false },
     description: { type: DataTypes.TEXT, allowNull: true },
     image: { type: DataTypes.STRING(500), allowNull: true },
