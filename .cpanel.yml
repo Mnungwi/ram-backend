@@ -1,0 +1,5 @@
+---
+deployment:
+  tasks:
+    - export DEPLOYPATH=/home/unitedram/api.unitedram.com/
+    - /usr/bin/rsync -a --exclude='.git' --exclude='.cpanel.yml' $PWD/ $DEPLOYPATH
