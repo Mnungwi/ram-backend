@@ -16,6 +16,21 @@ const { errorHandler, notFound } = require("./middleware/errorHandler");
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// CORS_ORIGIN may be a single origin, a comma-separated list ("a,b,c" — how
+// we configure it in production for the website + admin frontends), or "*".
+// The `cors` package does NOT split comma-separated strings itself — passed
+// as-is it treats "a,b" as one literal origin, which never matches a real
+// request's Origin header and the browser rejects it. Parse it into an
+// array (or leave "*" as a bare string) so every listed origin is honored.
+// Shared with the CSP directives below so production domains only need to
+// be set once, via this same env var.
+const corsOriginEnv = process.env.CORS_ORIGIN || "*";
+const corsOrigin =
+  corsOriginEnv === "*"
+    ? "*"
+    : corsOriginEnv.split(",").map((o) => o.trim()).filter(Boolean);
+const corsOriginList = () => (Array.isArray(corsOrigin) ? corsOrigin : []);
+
 // ─── Security ────────────────────────────────────────────────────────────────
 // Relax helmet CSP for Swagger UI (it needs inline scripts/styles)
 app.use(
@@ -25,11 +40,14 @@ app.use(
         defaultSrc: ["'self'"],
         scriptSrc: ["'self'", "'unsafe-inline'", "cdn.jsdelivr.net"],
         styleSrc: ["'self'", "'unsafe-inline'", "cdn.jsdelivr.net"],
-        imgSrc: ["'self'", "data:", "cdn.jsdelivr.net", "http://localhost:3000", "http://localhost:4200"],
+        // Dev origins (localhost:3000/4200) stay so `npm run dev` keeps working;
+        // production frontends are added via CORS_ORIGIN (same env var the CORS
+        // middleware below parses) so this doesn't need editing per deploy.
+        imgSrc: ["'self'", "data:", "cdn.jsdelivr.net", "http://localhost:3000", "http://localhost:4200", ...corsOriginList()],
         connectSrc: ["'self'"],
         workerSrc: ["'self'", "blob:"],
         objectSrc: ["'none'"],
-        frameAncestors: ["'self'", "http://localhost:4200", "http://localhost:3000"],
+        frameAncestors: ["'self'", "http://localhost:4200", "http://localhost:3000", ...corsOriginList()],
         upgradeInsecureRequests: [],
       },
     },
@@ -37,18 +55,6 @@ app.use(
     crossOriginResourcePolicy: { policy: "cross-origin" },
   }),
 );
-
-// CORS_ORIGIN may be a single origin, a comma-separated list ("a,b,c" — how
-// we configure it in production for the website + admin frontends), or "*".
-// The `cors` package does NOT split comma-separated strings itself — passed
-// as-is it treats "a,b" as one literal origin, which never matches a real
-// request's Origin header and the browser rejects it. Parse it into an
-// array (or leave "*" as a bare string) so every listed origin is honored.
-const corsOriginEnv = process.env.CORS_ORIGIN || "*";
-const corsOrigin =
-  corsOriginEnv === "*"
-    ? "*"
-    : corsOriginEnv.split(",").map((o) => o.trim()).filter(Boolean);
 
 app.use(
   cors({
