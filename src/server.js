@@ -38,9 +38,21 @@ app.use(
   }),
 );
 
+// CORS_ORIGIN may be a single origin, a comma-separated list ("a,b,c" — how
+// we configure it in production for the website + admin frontends), or "*".
+// The `cors` package does NOT split comma-separated strings itself — passed
+// as-is it treats "a,b" as one literal origin, which never matches a real
+// request's Origin header and the browser rejects it. Parse it into an
+// array (or leave "*" as a bare string) so every listed origin is honored.
+const corsOriginEnv = process.env.CORS_ORIGIN || "*";
+const corsOrigin =
+  corsOriginEnv === "*"
+    ? "*"
+    : corsOriginEnv.split(",").map((o) => o.trim()).filter(Boolean);
+
 app.use(
   cors({
-    origin: process.env.CORS_ORIGIN || "*",
+    origin: corsOrigin,
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
   }),
