@@ -88,11 +88,11 @@ const seed = async () => {
     // ── 4. Seed Super Admin User ─────────────────────────
     console.log('👤 Seeding super admin...');
     const [superAdmin, created] = await User.unscoped().findOrCreate({
-      where: { email: 'admin@farida.co.tz' },
+      where: { email: 'admin@ram.co.tz' },
       defaults: {
         firstName: 'Ali',
         lastName: 'Mohamed',
-        email: 'admin@farida.co.tz',
+        email: 'admin@ram.co.tz',
         password: 'Admin@1234',
         jobTitle: 'Project Manager',
         department: 'Management',
@@ -107,17 +107,17 @@ const seed = async () => {
         where: { userId: superAdmin.id, roleId: superAdminRole.id, projectId: null },
         defaults: { userId: superAdmin.id, roleId: superAdminRole.id },
       });
-      console.log('  ✅ Super admin created: admin@farida.co.tz / Admin@1234');
+      console.log('  ✅ Super admin created: admin@ram.co.tz / Admin@1234');
     } else {
       console.log('  ℹ️  Super admin already exists');
     }
 
     // ── 5. Seed Demo Users ───────────────────────────────
     const demoUsers = [
-      { firstName: 'Hassan',  lastName: 'Juma',  email: 'hassan@farida.co.tz',  password: 'Demo@1234', jobTitle: 'Site Engineer',    roleSlug: 'site_engineer' },
-      { firstName: 'Salim',   lastName: 'Ali',   email: 'salim@farida.co.tz',   password: 'Demo@1234', jobTitle: 'MEP Engineer',      roleSlug: 'site_engineer' },
-      { firstName: 'Fatma',   lastName: 'Salum', email: 'fatma@farida.co.tz',   password: 'Demo@1234', jobTitle: 'Finance Officer',   roleSlug: 'finance_officer' },
-      { firstName: 'Mohamed', lastName: 'Said',  email: 'msaid@farida.co.tz',   password: 'Demo@1234', jobTitle: 'Quantity Surveyor', roleSlug: 'quantity_surveyor' },
+      { firstName: 'Hassan',  lastName: 'Juma',  email: 'hassan@ram.co.tz',  password: 'Demo@1234', jobTitle: 'Site Engineer',    roleSlug: 'site_engineer' },
+      { firstName: 'Salim',   lastName: 'Ali',   email: 'salim@ram.co.tz',   password: 'Demo@1234', jobTitle: 'MEP Engineer',      roleSlug: 'site_engineer' },
+      { firstName: 'Fatma',   lastName: 'Salum', email: 'fatma@ram.co.tz',   password: 'Demo@1234', jobTitle: 'Finance Officer',   roleSlug: 'finance_officer' },
+      { firstName: 'Mohamed', lastName: 'Said',  email: 'msaid@ram.co.tz',   password: 'Demo@1234', jobTitle: 'Quantity Surveyor', roleSlug: 'quantity_surveyor' },
     ];
 
     for (const u of demoUsers) {
@@ -135,8 +135,8 @@ const seed = async () => {
 
     console.log('\n🎉 Seed complete!\n');
     console.log('─'.repeat(40));
-    console.log('Super Admin  → admin@farida.co.tz / Admin@1234');
-    console.log('Demo Users   → [name]@farida.co.tz / Demo@1234');
+    console.log('Super Admin  → admin@ram.co.tz / Admin@1234');
+    console.log('Demo Users   → [name]@ram.co.tz / Demo@1234');
     console.log('─'.repeat(40));
 
     process.exit(0);

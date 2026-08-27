@@ -1,5 +1,5 @@
 /**
- * Farida Projects - Permission Definitions
+ * RAM Projects - Permission Definitions
  * Format: RESOURCE_ACTION
  */
 
@@ -164,6 +164,10 @@ const PERMISSIONS = {
   TECHNICIAN_CREATE: "technician:create",
   TECHNICIAN_UPDATE: "technician:update",
   TECHNICIAN_DELETE: "technician:delete",
+
+  // ─── INQUIRIES (Website Contact / Careers Inbox) ───────
+  INQUIRY_VIEW: "inquiry:view",
+  INQUIRY_DELETE: "inquiry:delete",
 };
 
 const ROLE_PERMISSIONS = {
@@ -271,6 +275,9 @@ const ROLE_PERMISSIONS = {
     PERMISSIONS.REQUISITION_REVIEW,
     PERMISSIONS.REQUISITION_APPROVE,
     PERMISSIONS.REQUISITION_ISSUE,
+
+    PERMISSIONS.INQUIRY_VIEW,
+    PERMISSIONS.INQUIRY_DELETE,
   ],
 
   // Project Manager

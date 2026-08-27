@@ -25,6 +25,9 @@ const { Media } = require("./media.model");
 const { ProjectGallery } = require("./gallery.model");
 const { Technician, TechnicianCategory, TechnicianReceipt, ProjectTechnician } = require("./technician.model");
 const { ProjectStorekeeper } = require("./storekeeper.model");
+const { Budget, Payment, Invoice, InvoicePayment, Expense, ExpenseCategory, FundingSource } = require('./finance.model');
+const { Inquiry } = require("./inquiry.model");
+const { JobApplication } = require("./jobApplication.model");
 
 // ─── JUNCTION TABLES ──────────────────────────────────────────────────────────
 
@@ -74,8 +77,8 @@ UserPermission.belongsTo(User, { foreignKey: 'userId' });
 UserPermission.belongsTo(Permission, { foreignKey: 'permissionId', as: 'permission' });
 
 // Project
-// Project.hasMany(ProjectPhase, { foreignKey: 'projectId', as: 'phases' });
-// ProjectPhase.belongsTo(Project, { foreignKey: 'projectId', as: 'project' });
+Project.hasMany(ProjectPhase, { foreignKey: 'projectId', as: 'phases' });
+ProjectPhase.belongsTo(Project, { foreignKey: 'projectId', as: 'project' });
 
 Client.hasMany(Project, { foreignKey: "clientId", as: "projects" });
 Project.belongsTo(Client, { foreignKey: "clientId", as: "clientInfo" });
@@ -233,6 +236,22 @@ ProjectStorekeeper.belongsTo(User, { foreignKey: "userId", as: "user" });
 ProjectStorekeeper.belongsTo(User, { foreignKey: "assignedById", as: "assignedBy" });
 User.hasMany(ProjectStorekeeper, { foreignKey: "userId", as: "storekeeperAssignments" });
 
+// ─── FINANCE ASSOCIATIONS ───────────────────────────────────────────────────
+Payment.belongsTo(Activity, { foreignKey: "activityId", as: "activity" });
+Invoice.belongsTo(Activity, { foreignKey: "activityId", as: "activity" });
+Budget.belongsTo(Activity, { foreignKey: "activityId", as: "activity" });
+Expense.belongsTo(Activity, { foreignKey: "activityId", as: "activity" });
+Payment.belongsTo(Technician, { foreignKey: "paidToId", as: "paidTo" });
+Invoice.belongsTo(Supplier, { foreignKey: "supplierId", as: "supplier" });
+Invoice.belongsTo(LocalPurchaseOrder, { foreignKey: "lpoId", as: "lpo" });
+LocalPurchaseOrder.hasMany(Invoice, { foreignKey: "lpoId", as: "invoices" });
+Payment.belongsTo(User, { foreignKey: "createdById", as: "createdBy" });
+Payment.belongsTo(User, { foreignKey: "approvedById", as: "approvedBy" });
+Payment.belongsTo(User, { foreignKey: "signedById", as: "signedBy" });
+Invoice.belongsTo(User, { foreignKey: "createdById", as: "createdBy" });
+Invoice.belongsTo(User, { foreignKey: "approvedById", as: "approvedBy" });
+Expense.belongsTo(User, { foreignKey: "createdById", as: "createdBy" });
+
 module.exports = {
   sequelize,
   User,
@@ -272,4 +291,13 @@ module.exports = {
   TechnicianReceipt,
   ProjectTechnician,
   ProjectStorekeeper,
+  Budget,
+  Payment,
+  Invoice,
+  InvoicePayment,
+  Expense,
+  ExpenseCategory,
+  FundingSource,
+  Inquiry,
+  JobApplication,
 };

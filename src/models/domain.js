@@ -13,6 +13,9 @@ const Project = sequelize.define(
     projectCode: { type: DataTypes.STRING(50), allowNull: false, unique: 'projects_code_unique' },
     name: { type: DataTypes.STRING(255), allowNull: false },
     description: { type: DataTypes.TEXT, allowNull: true },
+    // Kiswahili sibling fields — auto-translated on save unless provided (see utils/translate.js)
+    name_sw: { type: DataTypes.STRING(255), allowNull: true },
+    description_sw: { type: DataTypes.TEXT, allowNull: true },
     image: { type: DataTypes.STRING(500), allowNull: true },
     status: {
       type: DataTypes.ENUM("active", "on_hold", "completed", "cancelled"),
@@ -34,6 +37,15 @@ const Project = sequelize.define(
     showOnHomePage: { type: DataTypes.BOOLEAN, defaultValue: false },
     visibility: { type: DataTypes.ENUM("public", "private"), defaultValue: "public" },
     displayOrder: { type: DataTypes.INTEGER, defaultValue: 0 },
+    // Website "Project Detail" page — per-project overrides so this content
+    // stops being the same generic text/numbers on every project.
+    approachQuality: { type: DataTypes.TEXT, allowNull: true },
+    approachQuality_sw: { type: DataTypes.TEXT, allowNull: true },
+    approachDelivery: { type: DataTypes.TEXT, allowNull: true },
+    approachDelivery_sw: { type: DataTypes.TEXT, allowNull: true },
+    contractValue: { type: DataTypes.STRING(255), allowNull: true },
+    contractDuration: { type: DataTypes.STRING(255), allowNull: true },
+    contractDuration_sw: { type: DataTypes.STRING(255), allowNull: true },
   },
   { tableName: "projects" },
 );

@@ -1,7 +1,8 @@
 const express = require("express");
 const router = express.Router();
-const { Project, Media, ProjectGallery } = require("../models/index");
+const { Project, Media, ProjectGallery, Inquiry, JobApplication, Client } = require("../models/index");
 const { successResponse, errorResponse } = require("../utils/response");
+const resumeUpload = require("../middleware/resumeUpload");
 
 // GET /api/public/projects
 router.get("/projects", async (req, res, next) => {
@@ -14,6 +15,7 @@ router.get("/projects", async (req, res, next) => {
 
     const projects = await Project.findAll({
       where,
+      include: [{ model: Client, as: "clientInfo", attributes: ["id", "name"] }],
       order: [["displayOrder", "ASC"], ["createdAt", "DESC"]]
     });
     
@@ -27,7 +29,8 @@ router.get("/projects", async (req, res, next) => {
 router.get("/projects/:projectId", async (req, res, next) => {
   try {
     const project = await Project.findOne({
-      where: { id: req.params.projectId, visibility: "public" }
+      where: { id: req.params.projectId, visibility: "public" },
+      include: [{ model: Client, as: "clientInfo", attributes: ["id", "name"] }]
     });
     
     if (!project) {
@@ -71,9 +74,12 @@ router.get("/news", async (req, res, next) => {
 // POST /api/public/contact
 router.post("/contact", async (req, res, next) => {
   try {
-    const { name, email, subject, message } = req.body;
-    console.log("Public contact message received:", { name, email, subject, message });
-    return successResponse(res, {}, "Message received successfully");
+    const { name, email, phone, subject, message } = req.body;
+    if (!name || !email || !message) {
+      return errorResponse(res, "Name, email and message are required", 400);
+    }
+    const inquiry = await Inquiry.create({ name, email, phone, subject, message });
+    return successResponse(res, { id: inquiry.id }, "Message received successfully");
   } catch (err) {
     next(err);
   }
@@ -124,12 +130,22 @@ router.get("/settings", async (req, res, next) => {
   }
 });
 
-// POST /api/public/careers/apply
-router.post("/careers/apply", async (req, res, next) => {
+// POST /api/public/careers/apply  (multipart/form-data: name, email, phone, position, message, cv)
+router.post("/careers/apply", resumeUpload.single("cv"), async (req, res, next) => {
   try {
-    const { name, email, position } = req.body;
-    console.log("Public career application received for:", { name, email, position });
-    return successResponse(res, {}, "Career application received successfully");
+    const { name, email, phone, position, message } = req.body;
+    if (!name || !email) {
+      return errorResponse(res, "Name and email are required", 400);
+    }
+    const application = await JobApplication.create({
+      name,
+      email,
+      phone,
+      position,
+      coverMessage: message,
+      resumeFilename: req.file ? req.file.filename : null,
+    });
+    return successResponse(res, { id: application.id }, "Career application received successfully");
   } catch (err) {
     next(err);
   }

@@ -88,12 +88,12 @@ app.use("/api/auth/register", authLimiter);
 
 // ─── Swagger UI ───────────────────────────────────────────────────────────────
 const swaggerUiOptions = {
-  customSiteTitle: "Farida Projects API",
+  customSiteTitle: "RAM Projects API",
   customfavIcon: "/favicon.ico",
   customCss: `
     .swagger-ui .topbar { background: #1e3a5f; padding: 10px 0; }
     .swagger-ui .topbar .download-url-wrapper { display: none; }
-    .swagger-ui .topbar-wrapper img { content: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 30'%3E%3Ctext y='22' font-size='18' font-weight='bold' fill='white' font-family='sans-serif'%3E🏗 Farida Projects%3C/text%3E%3C/svg%3E"); height:30px; }
+    .swagger-ui .topbar-wrapper img { content: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 30'%3E%3Ctext y='22' font-size='18' font-weight='bold' fill='white' font-family='sans-serif'%3E🏗 RAM Projects%3C/text%3E%3C/svg%3E"); height:30px; }
     .swagger-ui .info .title { color: #1e3a5f; }
     .swagger-ui .btn.authorize { background: #1e3a5f; border-color: #1e3a5f; color: white; }
     .swagger-ui .btn.authorize svg { fill: white; }
@@ -138,7 +138,7 @@ app.use(
 app.get("/health", (req, res) => {
   res.json({
     status: "ok",
-    app: process.env.APP_NAME || "Farida Projects API",
+    app: process.env.APP_NAME || "RAM Projects API",
     version: "2.0.0",
     docs: `http://localhost:${PORT}/api/docs`,
     timestamp: new Date().toISOString(),
@@ -162,7 +162,7 @@ const start = async () => {
   await sequelize.sync({ alter: true });
 
   app.listen(PORT, () => {
-    console.log(`\n🚀 Farida Projects API  →  http://localhost:${PORT}`);
+    console.log(`\n🚀 RAM Projects API  →  http://localhost:${PORT}`);
     console.log(`📖 Swagger UI           →  http://localhost:${PORT}/api/docs`);
     console.log(
       `📄 OpenAPI JSON         →  http://localhost:${PORT}/api/docs/openapi.json`,

@@ -13,8 +13,30 @@ const {
   getPagination,
 } = require("../utils/response");
 const { audit } = require("../utils/audit");
+const { translateToSw } = require("../utils/translate");
 const { Op } = require("sequelize");
 const { raw } = require("express");
+
+// Fills name_sw/description_sw via auto-translate when left blank —
+// never overwrites a value the admin already typed.
+async function fillSwahiliFields(data) {
+  if (data.name && !data.name_sw) {
+    data.name_sw = await translateToSw(data.name);
+  }
+  if (data.description && !data.description_sw) {
+    data.description_sw = await translateToSw(data.description);
+  }
+  if (data.approachQuality && !data.approachQuality_sw) {
+    data.approachQuality_sw = await translateToSw(data.approachQuality);
+  }
+  if (data.approachDelivery && !data.approachDelivery_sw) {
+    data.approachDelivery_sw = await translateToSw(data.approachDelivery);
+  }
+  if (data.contractDuration && !data.contractDuration_sw) {
+    data.contractDuration_sw = await translateToSw(data.contractDuration);
+  }
+  return data;
+}
 
 // Common includes for project queries
 const PROJECT_INCLUDES = [
@@ -185,7 +207,7 @@ exports.getProjectOverview = async (req, res, next) => {
 exports.createProject = async (req, res, next) => {
   try {
     const project = await Project.create({
-      ...req.body,
+      ...(await fillSwahiliFields({ ...req.body })),
       createdById: req.userId,
     });
     const full = await Project.findByPk(project.id, {
@@ -209,7 +231,7 @@ exports.updateProject = async (req, res, next) => {
   try {
     const project = await Project.findByPk(req.params.projectId);
     if (!project) return errorResponse(res, "Project not found", 404);
-    await project.update(req.body);
+    await project.update(await fillSwahiliFields({ ...req.body }));
     const full = await Project.findByPk(project.id, {
       include: PROJECT_INCLUDES,
     });

@@ -1,6 +1,6 @@
 require('dotenv').config({ path: require('path').join(__dirname, '../../.env') });
 const { sequelize, User, Project, ProjectPhase, Activity, Contract, PurchaseOrder,
-  Supplier, Invoice, Payment, Expense, BudgetItem, Report, Document, TeamMember,Client } = require('../models/index');
+  Supplier, Invoice, Payment, Expense, ExpenseCategory, BudgetItem, Report, Document, TeamMember, Client } = require('../models/index');
 
 // ═══════════════════════════════════════════════════════
 // HELPERS
@@ -16,15 +16,15 @@ const seedDemoData = async () => {
     const users = await User.unscoped().findAll();
     const byEmail = (email) => users.find((u) => u.email === email);
 
-    const admin = byEmail("admin@farida.co.tz"); // Project Manager - Ali Mohamed
-    const hassan = byEmail("hassan@farida.co.tz"); // Site Engineer
-    const salim = byEmail("salim@farida.co.tz"); // MEP Engineer
-    const fatma = byEmail("fatma@farida.co.tz"); // Finance Officer
-    const msaid = byEmail("msaid@farida.co.tz"); // Quantity Surveyor
+    const admin = byEmail("admin@ram.co.tz"); // Project Manager - Ali Mohamed
+    const hassan = byEmail("hassan@ram.co.tz"); // Site Engineer
+    const salim = byEmail("salim@ram.co.tz"); // MEP Engineer
+    const fatma = byEmail("fatma@ram.co.tz"); // Finance Officer
+    const msaid = byEmail("msaid@ram.co.tz"); // Quantity Surveyor
 
     if (!admin) {
       throw new Error(
-        "Run the auth/role seed first (seed.js) — admin@farida.co.tz not found.",
+        "Run the auth/role seed first (seed.js) — admin@ram.co.tz not found.",
       );
     }
     // ═══════════════════════════════════════════════════
@@ -504,14 +504,18 @@ const seedDemoData = async () => {
       },
     ];
     const contracts = {};
-    for (const c of contractDefs) {
-      const [contract] = await Contract.findOrCreate({
-        where: { contractNo: c.contractNo },
-        defaults: { ...c, projectId: project.id, createdById: msaid.id },
-      });
-      contracts[c.contractNo] = contract;
+    if (typeof Contract !== 'undefined' && Contract) {
+      for (const c of contractDefs) {
+        const [contract] = await Contract.findOrCreate({
+          where: { contractNo: c.contractNo },
+          defaults: { ...c, projectId: project.id, createdById: msaid.id },
+        });
+        contracts[c.contractNo] = contract;
+      }
+      console.log(`  ✅ ${contractDefs.length} contracts seeded`);
+    } else {
+      console.log(`  ℹ️  Contract model not defined, skipping contract seed`);
     }
-    console.log(`  ✅ ${contractDefs.length} contracts seeded`);
 
     // ═══════════════════════════════════════════════════
     // 6. PURCHASE ORDERS
@@ -564,23 +568,27 @@ const seedDemoData = async () => {
         status: "received",
       },
     ];
-    for (const po of poDefs) {
-      await PurchaseOrder.findOrCreate({
-        where: { poNumber: po.poNumber },
-        defaults: {
-          projectId: project.id,
-          contractId: contracts[po.contractNo].id,
-          supplierId: suppliers[po.supplier].id,
-          description: po.description,
-          amount: po.amount,
-          issuedDate: po.issuedDate,
-          status: po.status,
-          approvedById: msaid.id,
-          createdById: msaid.id,
-        },
-      });
+    if (typeof PurchaseOrder !== 'undefined' && PurchaseOrder) {
+      for (const po of poDefs) {
+        await PurchaseOrder.findOrCreate({
+          where: { poNumber: po.poNumber },
+          defaults: {
+            projectId: project.id,
+            contractId: contracts[po.contractNo]?.id,
+            supplierId: suppliers[po.supplier]?.id,
+            description: po.description,
+            amount: po.amount,
+            issuedDate: po.issuedDate,
+            status: po.status,
+            approvedById: msaid.id,
+            createdById: msaid.id,
+          },
+        });
+      }
+      console.log(`  ✅ ${poDefs.length} purchase orders seeded`);
+    } else {
+      console.log(`  ℹ️  PurchaseOrder model not defined, skipping purchase orders seed`);
     }
-    console.log(`  ✅ ${poDefs.length} purchase orders seeded`);
 
     // ═══════════════════════════════════════════════════
     // 7. BUDGET ITEMS
@@ -676,20 +684,17 @@ const seedDemoData = async () => {
     ];
     const invoices = {};
     for (const inv of invoiceDefs) {
-      const tax = Math.round(inv.amount * 0.18);
       const [invoice] = await Invoice.findOrCreate({
         where: { invoiceNo: inv.invoiceNo },
         defaults: {
           projectId: project.id,
-          contractId: contracts[inv.contractNo].id,
-          supplierId: suppliers[inv.supplier].id,
+          supplierId: suppliers[inv.supplier]?.id || null,
+          invoiceNo: inv.invoiceNo,
           description: inv.description,
           amount: inv.amount,
-          tax,
-          totalAmount: inv.amount + tax,
-          invoiceDate: inv.invoiceDate,
+          date: inv.invoiceDate,
           dueDate: inv.dueDate,
-          status: inv.status,
+          status: inv.status === "paid" ? "Paid" : "Pending Approval",
           approvedById: inv.status === "paid" ? fatma.id : null,
           createdById: fatma.id,
         },
@@ -704,56 +709,42 @@ const seedDemoData = async () => {
     console.log("💳 Seeding payments...");
     const paymentDefs = [
       {
-        paymentRef: "PAY-2026-018",
-        invoiceNo: null,
         description: "Payment for Construction Phase 1",
         amount: 25000000,
         paymentDate: "2026-05-15",
         status: "paid",
       },
       {
-        paymentRef: "PAY-2026-017",
-        invoiceNo: "INV-2026-017",
         description: "Payment for Materials",
         amount: 18500000,
         paymentDate: "2026-04-28",
         status: "paid",
       },
       {
-        paymentRef: "PAY-2026-016",
-        invoiceNo: null,
         description: "Advance Payment - Electrical",
         amount: 50000000,
         paymentDate: "2026-04-15",
         status: "paid",
       },
       {
-        paymentRef: "PAY-2026-015",
-        invoiceNo: null,
         description: "Civil Works Progress Payment",
         amount: 32000000,
         paymentDate: "2026-03-28",
         status: "paid",
       },
       {
-        paymentRef: "PAY-2026-014",
-        invoiceNo: null,
         description: "Mobilization Payment",
         amount: 20500000,
         paymentDate: "2026-03-15",
         status: "paid",
       },
       {
-        paymentRef: "PAY-2026-024",
-        invoiceNo: "INV-2026-024",
         description: "Civil Works - Stage 3",
         amount: 22000000,
         paymentDate: "2026-06-10",
         status: "pending_approval",
       },
       {
-        paymentRef: "PAY-2026-025",
-        invoiceNo: "INV-2026-025",
         description: "Electrical Installation",
         amount: 15500000,
         paymentDate: "2026-06-15",
@@ -762,15 +753,13 @@ const seedDemoData = async () => {
     ];
     for (const p of paymentDefs) {
       await Payment.findOrCreate({
-        where: { paymentRef: p.paymentRef },
+        where: { projectId: project.id, description: p.description },
         defaults: {
           projectId: project.id,
-          invoiceId: p.invoiceNo ? (invoices[p.invoiceNo]?.id ?? null) : null,
           description: p.description,
           amount: p.amount,
-          paymentDate: p.paymentDate,
-          paymentMethod: "Bank Transfer",
-          status: p.status,
+          date: p.paymentDate,
+          status: p.status === "paid" ? "Paid" : "Pending Approval",
           approvedById: p.status === "paid" ? fatma.id : null,
           createdById: fatma.id,
         },
@@ -820,17 +809,23 @@ const seedDemoData = async () => {
       },
     ];
     for (const e of expenseDefs) {
+      const [expCat] = await ExpenseCategory.findOrCreate({
+        where: { name: e.category },
+        defaults: { name: e.category },
+      });
       await Expense.findOrCreate({
         where: {
           projectId: project.id,
-          category: e.category,
+          categoryId: expCat.id,
           description: e.description,
         },
         defaults: {
-          ...e,
           projectId: project.id,
+          categoryId: expCat.id,
+          description: e.description,
+          amount: e.amount,
+          date: e.expenseDate,
           createdById: fatma.id,
-          approvedById: e.status === "approved" ? fatma.id : null,
         },
       });
     }

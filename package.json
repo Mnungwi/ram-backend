@@ -1,12 +1,14 @@
 {
-  "name": "farida-projects-backend",
+  "name": "ram-projects-backend",
   "version": "2.0.0",
-  "description": "Farida Projects - Construction Project Management Backend",
+  "description": "RAM Projects - Construction Project Management Backend",
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
     "seed": "node src/seeders/index.js",
+    "seed:all": "node src/seeders/runAllSeeders.js",
+    "seed:old-db": "node src/seeders/seedFromOldDatabase.js",
     "migrate": "node src/config/migrate.js"
   },
   "dependencies": {

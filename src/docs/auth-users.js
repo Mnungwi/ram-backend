@@ -39,10 +39,10 @@
  *       Authenticates a user and returns JWT tokens plus the full list of resolved permissions.
  *
  *       **Demo credentials:**
- *       - `admin@farida.co.tz` / `Admin@1234` (Super Admin)
- *       - `hassan@farida.co.tz` / `Demo@1234` (Site Engineer)
- *       - `fatma@farida.co.tz` / `Demo@1234` (Finance Officer)
- *       - `msaid@farida.co.tz` / `Demo@1234` (Quantity Surveyor)
+ *       - `admin@ram.co.tz` / `Admin@1234` (Super Admin)
+ *       - `hassan@ram.co.tz` / `Demo@1234` (Site Engineer)
+ *       - `fatma@ram.co.tz` / `Demo@1234` (Finance Officer)
+ *       - `msaid@ram.co.tz` / `Demo@1234` (Quantity Surveyor)
  *     security: []
  *     requestBody:
  *       required: true
@@ -53,10 +53,10 @@
  *           examples:
  *             admin:
  *               summary: Super Admin
- *               value: { email: 'admin@farida.co.tz', password: 'Admin@1234' }
+ *               value: { email: 'admin@ram.co.tz', password: 'Admin@1234' }
  *             engineer:
  *               summary: Site Engineer
- *               value: { email: 'hassan@farida.co.tz', password: 'Demo@1234' }
+ *               value: { email: 'hassan@ram.co.tz', password: 'Demo@1234' }
  *     responses:
  *       200:
  *         description: Login successful

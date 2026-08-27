@@ -4,6 +4,8 @@ const { sequelize } = require("../config/database");
 const { authenticate } = require("../middleware/auth");
 const { successResponse, errorResponse } = require("../utils/response");
 const { v4: uuidv4 } = require("uuid");
+const { translateToSw, TRANSLATABLE_JSON_ARRAY_SETTINGS, translateJsonArrayFields } = require("../utils/translate");
+const { TRANSLATABLE_SETTING_KEYS } = require("../config/translatableSettings");
 
 // Enforce authentication on all website management endpoints
 router.use(authenticate);
@@ -121,12 +123,18 @@ router.get("/services", async (req, res, next) => {
 
 router.post("/services", async (req, res, next) => {
   try {
-    const { title, icon, description } = req.body;
+    const { title, icon, description, overviewText, benefits, title_sw, description_sw, overviewText_sw } = req.body;
     const id = uuidv4();
+    const benefitsJson = JSON.stringify((benefits || '').split('\n').map(s => s.trim()).filter(Boolean));
+    const [titleSw, descriptionSw, overviewSw] = await Promise.all([
+      title_sw || (await translateToSw(title)),
+      description_sw || (await translateToSw(description)),
+      overviewText_sw || (await translateToSw(overviewText)),
+    ]);
     await sequelize.query(`
-      INSERT INTO website_services (id, title, icon, description, createdAt, updatedAt)
-      VALUES (?, ?, ?, ?, NOW(), NOW())
-    `, { replacements: [id, title, icon || 'bi-building', description || ''] });
+      INSERT INTO website_services (id, title, icon, description, overviewText, benefitsJson, title_sw, description_sw, overviewText_sw, createdAt, updatedAt)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
+    `, { replacements: [id, title, icon || 'bi-building', description || '', overviewText || '', benefitsJson, titleSw, descriptionSw, overviewSw] });
     return successResponse(res, { id }, "Service created successfully", 201);
   } catch (err) {
     next(err);
@@ -136,12 +144,19 @@ router.post("/services", async (req, res, next) => {
 router.put("/services/:id", async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { title, icon, description } = req.body;
+    const { title, icon, description, overviewText, benefits, title_sw, description_sw, overviewText_sw } = req.body;
+    const benefitsJson = JSON.stringify((benefits || '').split('\n').map(s => s.trim()).filter(Boolean));
+    const [titleSw, descriptionSw, overviewSw] = await Promise.all([
+      title_sw || (await translateToSw(title)),
+      description_sw || (await translateToSw(description)),
+      overviewText_sw || (await translateToSw(overviewText)),
+    ]);
     await sequelize.query(`
-      UPDATE website_services 
-      SET title = ?, icon = ?, description = ?, updatedAt = NOW()
+      UPDATE website_services
+      SET title = ?, icon = ?, description = ?, overviewText = ?, benefitsJson = ?,
+          title_sw = ?, description_sw = ?, overviewText_sw = ?, updatedAt = NOW()
       WHERE id = ?
-    `, { replacements: [title, icon || 'bi-building', description || '', id] });
+    `, { replacements: [title, icon || 'bi-building', description || '', overviewText || '', benefitsJson, titleSw, descriptionSw, overviewSw, id] });
     return successResponse(res, null, "Service updated successfully");
   } catch (err) {
     next(err);
@@ -170,12 +185,15 @@ router.get("/news", async (req, res, next) => {
 
 router.post("/news", async (req, res, next) => {
   try {
-    const { title, category, summary, content, image } = req.body;
+    const { title, category, summary, content, image, title_sw, summary_sw, content_sw } = req.body;
     const id = uuidv4();
+    const titleSw = title_sw || (await translateToSw(title));
+    const summarySw = summary_sw || (await translateToSw(summary));
+    const contentSw = content_sw || (await translateToSw(content));
     await sequelize.query(`
-      INSERT INTO website_news (id, title, category, summary, content, image, date, createdAt, updatedAt)
-      VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW(), NOW())
-    `, { replacements: [id, title, category || 'General', summary || '', content || '', image || '', ] });
+      INSERT INTO website_news (id, title, category, summary, content, image, title_sw, summary_sw, content_sw, date, createdAt, updatedAt)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW(), NOW())
+    `, { replacements: [id, title, category || 'General', summary || '', content || '', image || '', titleSw, summarySw, contentSw] });
     return successResponse(res, { id }, "News article created successfully", 201);
   } catch (err) {
     next(err);
@@ -185,12 +203,16 @@ router.post("/news", async (req, res, next) => {
 router.put("/news/:id", async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { title, category, summary, content, image } = req.body;
+    const { title, category, summary, content, image, title_sw, summary_sw, content_sw } = req.body;
+    const titleSw = title_sw || (await translateToSw(title));
+    const summarySw = summary_sw || (await translateToSw(summary));
+    const contentSw = content_sw || (await translateToSw(content));
     await sequelize.query(`
-      UPDATE website_news 
-      SET title = ?, category = ?, summary = ?, content = ?, image = ?, updatedAt = NOW()
+      UPDATE website_news
+      SET title = ?, category = ?, summary = ?, content = ?, image = ?,
+          title_sw = ?, summary_sw = ?, content_sw = ?, updatedAt = NOW()
       WHERE id = ?
-    `, { replacements: [title, category || 'General', summary || '', content || '', image || '', id] });
+    `, { replacements: [title, category || 'General', summary || '', content || '', image || '', titleSw, summarySw, contentSw, id] });
     return successResponse(res, null, "News article updated successfully");
   } catch (err) {
     next(err);
@@ -268,12 +290,14 @@ router.get("/faqs", async (req, res, next) => {
 
 router.post("/faqs", async (req, res, next) => {
   try {
-    const { question, answer, displayOrder } = req.body;
+    const { question, answer, displayOrder, question_sw, answer_sw } = req.body;
     const id = uuidv4();
+    const questionSw = question_sw || (await translateToSw(question));
+    const answerSw = answer_sw || (await translateToSw(answer));
     await sequelize.query(`
-      INSERT INTO website_faqs (id, question, answer, displayOrder, createdAt, updatedAt)
-      VALUES (?, ?, ?, ?, NOW(), NOW())
-    `, { replacements: [id, question, answer, displayOrder || 0] });
+      INSERT INTO website_faqs (id, question, answer, displayOrder, question_sw, answer_sw, createdAt, updatedAt)
+      VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW())
+    `, { replacements: [id, question, answer, displayOrder || 0, questionSw, answerSw] });
     return successResponse(res, { id }, "FAQ created successfully", 201);
   } catch (err) {
     next(err);
@@ -283,12 +307,14 @@ router.post("/faqs", async (req, res, next) => {
 router.put("/faqs/:id", async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { question, answer, displayOrder } = req.body;
+    const { question, answer, displayOrder, question_sw, answer_sw } = req.body;
+    const questionSw = question_sw || (await translateToSw(question));
+    const answerSw = answer_sw || (await translateToSw(answer));
     await sequelize.query(`
-      UPDATE website_faqs 
-      SET question = ?, answer = ?, displayOrder = ?, updatedAt = NOW()
+      UPDATE website_faqs
+      SET question = ?, answer = ?, displayOrder = ?, question_sw = ?, answer_sw = ?, updatedAt = NOW()
       WHERE id = ?
-    `, { replacements: [question, answer, displayOrder || 0, id] });
+    `, { replacements: [question, answer, displayOrder || 0, questionSw, answerSw, id] });
     return successResponse(res, null, "FAQ updated successfully");
   } catch (err) {
     next(err);
@@ -322,13 +348,35 @@ router.get("/settings", async (req, res, next) => {
 router.put("/settings", async (req, res, next) => {
   try {
     const body = req.body; // Expect key-value pairs
-    for (const [key, val] of Object.entries(body)) {
-      // Upsert key-value
+    const upsert = async (key, val) => {
       await sequelize.query(`
         INSERT INTO website_settings (\`key\`, \`value\`, createdAt, updatedAt)
         VALUES (?, ?, NOW(), NOW())
         ON DUPLICATE KEY UPDATE \`value\` = ?, updatedAt = NOW()
       `, { replacements: [key, val, val] });
+    };
+
+    for (const [key, val] of Object.entries(body)) {
+      // JSON-array settings (hero slider, showcase accordion) — translate
+      // each item's prose fields in place and store the enriched array back
+      // under the same key, instead of a "<key>_sw" sibling.
+      if (TRANSLATABLE_JSON_ARRAY_SETTINGS[key]) {
+        const enriched = await translateJsonArrayFields(val, TRANSLATABLE_JSON_ARRAY_SETTINGS[key]);
+        await upsert(key, enriched || val);
+        continue;
+      }
+
+      await upsert(key, val);
+
+      // Auto-translate known prose keys into "<key>_sw" — unless the admin
+      // already sent an explicit "<key>_sw" value in this same save (never
+      // overwrite a manual translation), and skip anything not on the
+      // allowlist (JSON blobs, image paths, emails, phones, URLs).
+      const swKey = `${key}_sw`;
+      if (TRANSLATABLE_SETTING_KEYS.has(key) && !(swKey in body)) {
+        const translated = await translateToSw(val);
+        if (translated) await upsert(swKey, translated);
+      }
     }
     return successResponse(res, null, "Settings updated successfully");
   } catch (err) {

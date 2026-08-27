@@ -22,14 +22,14 @@ POST /api/projects/:projectId/letters
   "priority": "high",
   "toName": "Hassan Juma",
   "toTitle": "Site Engineer",
-  "toOrg": "Farida Projects Ltd",
-  "toEmail": "hassan@farida.co.tz",
+  "toOrg": "RAM Projects Ltd",
+  "toEmail": "hassan@ram.co.tz",
   "fromName": "Ali Mohamed",
   "fromTitle": "Project Manager",
-  "fromOrg": "Farida Projects Ltd",
+  "fromOrg": "RAM Projects Ltd",
   "ccRecipients": [
-    { "name": "Fatma Salum",   "title": "Finance Officer", "email": "fatma@farida.co.tz" },
-    { "name": "Mohamed Said",  "title": "QS",              "email": "msaid@farida.co.tz" }
+    { "name": "Fatma Salum",   "title": "Finance Officer", "email": "fatma@ram.co.tz" },
+    { "name": "Mohamed Said",  "title": "QS",              "email": "msaid@ram.co.tz" }
   ],
   "referenceNo": "ZAE-2026-001"
 }

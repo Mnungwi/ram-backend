@@ -34,9 +34,9 @@ const seedStakeholders = async () => {
     const stakeholderDefs = [
       {
         name: 'Eng. Hassan Juma',
-        organization: 'Farida Projects Ltd',
+        organization: 'RAM Projects Ltd',
         jobTitle: 'Senior Project Manager',
-        email: 'hassan@farida.co.tz',
+        email: 'hassan@ram.co.tz',
         phone: '+255 773 100 002',
         city: 'Zanzibar City',
         stakeholderTypeId: typeMap['Project Manager'].id,

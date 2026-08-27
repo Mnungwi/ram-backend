@@ -1,4 +1,4 @@
-# Farida Projects — Backend API
+# RAM Projects — Backend API
 
 Node.js · Express · Sequelize · MySQL · JWT · Role-Based Access Control
 
@@ -15,7 +15,7 @@ cp .env.example .env
 # Edit .env with your DB credentials and secrets
 
 # 3. Create MySQL database
-mysql -u root -p -e "CREATE DATABASE farida_projects CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+mysql -u root -p -e "CREATE DATABASE ram_projects CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
 
 # 4. Seed roles, permissions, and demo users
 npm run seed
@@ -239,7 +239,7 @@ Response:
 |----------|-------------|---------|
 | `PORT` | Server port | `3000` |
 | `DB_HOST` | MySQL host | `localhost` |
-| `DB_NAME` | Database name | `farida_projects` |
+| `DB_NAME` | Database name | `ram_projects` |
 | `DB_USER` | DB username | `root` |
 | `DB_PASSWORD` | DB password | — |
 | `JWT_SECRET` | Access token secret | — |
@@ -257,8 +257,8 @@ After running `npm run seed`:
 
 | User | Email | Password | Role |
 |------|-------|----------|------|
-| Ali Mohamed | admin@farida.co.tz | Admin@1234 | Super Admin |
-| Hassan Juma | hassan@farida.co.tz | Demo@1234 | Site Engineer |
-| Salim Ali | salim@farida.co.tz | Demo@1234 | Site Engineer |
-| Fatma Salum | fatma@farida.co.tz | Demo@1234 | Finance Officer |
-| Mohamed Said | msaid@farida.co.tz | Demo@1234 | Quantity Surveyor |
+| Ali Mohamed | admin@ram.co.tz | Admin@1234 | Super Admin |
+| Hassan Juma | hassan@ram.co.tz | Demo@1234 | Site Engineer |
+| Salim Ali | salim@ram.co.tz | Demo@1234 | Site Engineer |
+| Fatma Salum | fatma@ram.co.tz | Demo@1234 | Finance Officer |
+| Mohamed Said | msaid@ram.co.tz | Demo@1234 | Quantity Surveyor |

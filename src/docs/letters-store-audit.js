@@ -62,15 +62,15 @@
  *             priority: high
  *             toName: "Hassan Juma"
  *             toTitle: "Site Engineer"
- *             toOrg: "Farida Projects Ltd"
- *             toEmail: "hassan@farida.co.tz"
+ *             toOrg: "RAM Projects Ltd"
+ *             toEmail: "hassan@ram.co.tz"
  *             ccRecipients:
  *               - name: "Fatma Salum"
  *                 title: "Finance Officer"
- *                 email: "fatma@farida.co.tz"
+ *                 email: "fatma@ram.co.tz"
  *               - name: "Mohamed Said"
  *                 title: "QS"
- *                 email: "msaid@farida.co.tz"
+ *                 email: "msaid@ram.co.tz"
  *             referenceNo: "ZAE-2026-001"
  *     responses:
  *       201:

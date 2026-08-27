@@ -4,10 +4,10 @@ const options = {
   definition: {
     openapi: "3.0.0",
     info: {
-      title: "Farida Projects API",
+      title: "RAM Projects API",
       version: "2.0.0",
       description: `
-## Farida Projects — Construction Management System
+## RAM Projects — Construction Management System
 
 Full REST API for managing construction projects including:
 - **Authentication** with JWT (access + refresh tokens)
@@ -26,20 +26,20 @@ Use \`POST /auth/login\` to get your token, then click **Authorize** above.
 ### Demo Credentials
 | Email | Password | Role |
 |-------|----------|------|
-| admin@farida.co.tz | Admin@1234 | Super Admin |
-| hassan@farida.co.tz | Demo@1234 | Site Engineer |
-| fatma@farida.co.tz | Demo@1234 | Finance Officer |
-| msaid@farida.co.tz | Demo@1234 | Quantity Surveyor |
+| admin@ram.co.tz | Admin@1234 | Super Admin |
+| hassan@ram.co.tz | Demo@1234 | Site Engineer |
+| fatma@ram.co.tz | Demo@1234 | Finance Officer |
+| msaid@ram.co.tz | Demo@1234 | Quantity Surveyor |
       `,
       contact: {
-        name: "Farida Projects",
-        email: "info@farida.co.tz",
+        name: "RAM Projects",
+        email: "info@ram.co.tz",
       },
       license: { name: "MIT" },
     },
     servers: [
       { url: "http://localhost:3000/api", description: "Development" },
-      { url: "https://api.farida.co.tz/api", description: "Production" },
+      { url: "https://api.ram.co.tz/api", description: "Production" },
     ],
     components: {
       securitySchemes: {
@@ -95,7 +95,7 @@ Use \`POST /auth/login\` to get your token, then click **Authorize** above.
             email: {
               type: "string",
               format: "email",
-              example: "admin@farida.co.tz",
+              example: "admin@ram.co.tz",
             },
             phone: { type: "string", example: "+255777000000" },
             jobTitle: { type: "string", example: "Project Manager" },
@@ -114,7 +114,7 @@ Use \`POST /auth/login\` to get your token, then click **Authorize** above.
             email: {
               type: "string",
               format: "email",
-              example: "user@farida.co.tz",
+              example: "user@ram.co.tz",
             },
             password: {
               type: "string",
@@ -133,7 +133,7 @@ Use \`POST /auth/login\` to get your token, then click **Authorize** above.
             email: {
               type: "string",
               format: "email",
-              example: "admin@farida.co.tz",
+              example: "admin@ram.co.tz",
             },
             password: { type: "string", example: "Admin@1234" },
           },
@@ -363,7 +363,7 @@ Use \`POST /auth/login\` to get your token, then click **Authorize** above.
             email: {
               type: "string",
               format: "email",
-              example: "fatma@farida.co.tz",
+              example: "fatma@ram.co.tz",
             },
           },
         },
@@ -441,15 +441,15 @@ Use \`POST /auth/login\` to get your token, then click **Authorize** above.
             },
             toName: { type: "string", example: "Hassan Juma" },
             toTitle: { type: "string", example: "Site Engineer" },
-            toOrg: { type: "string", example: "Farida Projects Ltd" },
+            toOrg: { type: "string", example: "RAM Projects Ltd" },
             toEmail: {
               type: "string",
               format: "email",
-              example: "hassan@farida.co.tz",
+              example: "hassan@ram.co.tz",
             },
             fromName: { type: "string", example: "Ali Mohamed" },
             fromTitle: { type: "string", example: "Project Manager" },
-            fromOrg: { type: "string", example: "Farida Projects Ltd" },
+            fromOrg: { type: "string", example: "RAM Projects Ltd" },
             ccRecipients: {
               type: "array",
               items: { $ref: "#/components/schemas/CcRecipient" },
@@ -457,12 +457,12 @@ Use \`POST /auth/login\` to get your token, then click **Authorize** above.
                 {
                   name: "Fatma Salum",
                   title: "Finance Officer",
-                  email: "fatma@farida.co.tz",
+                  email: "fatma@ram.co.tz",
                 },
                 {
                   name: "Mohamed Said",
                   title: "QS",
-                  email: "msaid@farida.co.tz",
+                  email: "msaid@ram.co.tz",
                 },
               ],
             },
