@@ -25,7 +25,7 @@ const { Media } = require("./media.model");
 const { ProjectGallery } = require("./gallery.model");
 const { Technician, TechnicianCategory, TechnicianReceipt, ProjectTechnician } = require("./technician.model");
 const { ProjectStorekeeper } = require("./storekeeper.model");
-const { Budget, Payment, Invoice, InvoicePayment, Expense, ExpenseCategory, FundingSource } = require('./finance.model');
+const { Budget, Payment, Invoice, InvoicePayment, Expense, ExpenseCategory, FundingSource, SiteFundDisbursement } = require('./finance.model');
 const { Inquiry } = require("./inquiry.model");
 const { JobApplication } = require("./jobApplication.model");
 
@@ -258,6 +258,12 @@ Invoice.belongsTo(User, { foreignKey: "createdById", as: "createdBy" });
 Invoice.belongsTo(User, { foreignKey: "approvedById", as: "approvedBy" });
 Expense.belongsTo(User, { foreignKey: "createdById", as: "createdBy" });
 
+// ─── SITE FUND DISBURSEMENT ASSOCIATIONS ────────────────────────────────────
+Project.hasMany(SiteFundDisbursement, { foreignKey: "projectId", as: "siteFundDisbursements" });
+SiteFundDisbursement.belongsTo(Project, { foreignKey: "projectId", as: "project" });
+SiteFundDisbursement.belongsTo(User, { foreignKey: "storekeeperUserId", as: "storekeeper" });
+SiteFundDisbursement.belongsTo(User, { foreignKey: "disbursedById", as: "disbursedBy" });
+
 module.exports = {
   sequelize,
   User,
@@ -304,6 +310,7 @@ module.exports = {
   Expense,
   ExpenseCategory,
   FundingSource,
+  SiteFundDisbursement,
   Inquiry,
   JobApplication,
 };

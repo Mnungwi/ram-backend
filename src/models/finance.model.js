@@ -183,6 +183,34 @@ const FundingSource = sequelize.define(
   { tableName: "funding_sources" },
 );
 
+// ─── SITE FUND DISBURSEMENT (cash handed to a project storekeeper for site
+// expenses; their expenditure is simply their own Expense records for the
+// project — see siteFundController.getBalance) ─────────────────────────────
+const SiteFundDisbursement = sequelize.define(
+  "SiteFundDisbursement",
+  {
+    id: { type: DataTypes.UUID, defaultValue: DataTypes.UUIDV4, primaryKey: true },
+    projectId: { type: DataTypes.UUID, allowNull: false },
+    storekeeperUserId: { type: DataTypes.UUID, allowNull: false },
+    amount: { type: DataTypes.DECIMAL(15, 2), allowNull: false },
+    date: { type: DataTypes.DATEONLY, allowNull: false },
+    method: {
+      type: DataTypes.ENUM("cash", "bank_transfer", "mobile_money"),
+      defaultValue: "cash",
+    },
+    referenceNo: { type: DataTypes.STRING(100), allowNull: true },
+    notes: { type: DataTypes.TEXT, allowNull: true },
+    disbursedById: { type: DataTypes.UUID, allowNull: true },
+  },
+  {
+    tableName: "site_fund_disbursements",
+    // Match users.id / projects.id (utf8mb4_bin) so the FK constraints Sequelize
+    // adds on sync({alter:true}) don't fail with errno 150.
+    charset: "utf8mb4",
+    collate: "utf8mb4_bin",
+  },
+);
+
 // Associations defined in models/index.js
 
 module.exports = {
@@ -193,5 +221,6 @@ module.exports = {
   Expense,
   ExpenseCategory,
   FundingSource,
+  SiteFundDisbursement,
   STATUS_VALUES,
 };
