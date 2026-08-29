@@ -107,7 +107,8 @@ exports.createDisbursement = async (req, res, next) => {
     const { storekeeperUserId, amount, date, method, referenceNo, notes } = req.body;
 
     if (!storekeeperUserId) return errorResponse(res, "Please choose a storekeeper", 400);
-    if (!amount || parseFloat(amount) <= 0) return errorResponse(res, "A valid amount is required", 400);
+    const parsedAmount = parseFloat(amount);
+    if (!amount || isNaN(parsedAmount) || parsedAmount <= 0) return errorResponse(res, "A valid amount is required", 400);
     if (!date) return errorResponse(res, "Date is required", 400);
 
     const assignment = await ProjectStorekeeper.findOne({
