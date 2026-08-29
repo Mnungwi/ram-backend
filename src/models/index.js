@@ -122,6 +122,7 @@ TeamMember.belongsTo(User, { foreignKey: 'userId', as: 'user' });
 User.hasMany(TeamMember, { foreignKey: 'userId', as: 'projectMemberships' });
 
 AuditLog.belongsTo(User, { foreignKey: 'userId', as: 'user' });
+AuditLog.belongsTo(Project, { foreignKey: 'projectId', as: 'project' });
 
 // StakeholderType
 StakeholderType.hasMany(Stakeholder, { foreignKey: 'stakeholderTypeId', as: 'stakeholders' });

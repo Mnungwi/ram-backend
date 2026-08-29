@@ -32,6 +32,7 @@ router.use("/storekeepers", require("./storekeepers.routes"));
 router.use("/projects", require("./projects.routes"));
 router.use("/media", require("./media.routes"));
 router.use("/inquiries", require("./inquiries.routes"));
+router.use("/audit-logs", require("./audit.routes"));
 router.use("/", require("./gallery.routes"));
 router.use("/", require("./letter.routes"));
 router.use("/", require("./finance.routes"));

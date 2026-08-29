@@ -168,6 +168,10 @@ const PERMISSIONS = {
   // ─── INQUIRIES (Website Contact / Careers Inbox) ───────
   INQUIRY_VIEW: "inquiry:view",
   INQUIRY_DELETE: "inquiry:delete",
+
+  // ─── AUDIT LOGS (System-wide activity trail) ───────────
+  AUDIT_VIEW: "audit:view",
+  AUDIT_EXPORT: "audit:export",
 };
 
 const ROLE_PERMISSIONS = {
