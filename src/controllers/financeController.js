@@ -296,6 +296,61 @@ exports.getBudget = async (req, res, next) => {
   }
 };
 
+// GET /api/projects/:projectId/finance/cashflow?year=2026
+// Monthly Planned (annual budget spread evenly) vs Actual (real payments +
+// expenses + invoice payments, by their `date`) vs cumulative actual.
+exports.getCashFlow = async (req, res, next) => {
+  try {
+    const { projectId } = req.params;
+    const year = parseInt(req.query.year) || new Date().getFullYear();
+    const from = `${year}-01-01`;
+    const to = `${year}-12-31`;
+
+    const totalBudget = (await Budget.sum("budgetAmount", { where: { projectId } })) || 0;
+    const monthlyPlanned = totalBudget / 12;
+
+    const [payments, expenses, invoicePayments] = await Promise.all([
+      Payment.findAll({
+        where: { projectId, status: "Paid", date: { [Op.between]: [from, to] } },
+        attributes: ["amount", "date"],
+      }),
+      Expense.findAll({
+        where: { projectId, date: { [Op.between]: [from, to] } },
+        attributes: ["amount", "date"],
+      }),
+      InvoicePayment.findAll({
+        include: [{ model: Invoice, as: "invoice", where: { projectId }, attributes: [] }],
+        where: { date: { [Op.between]: [from, to] } },
+        attributes: ["amount", "date"],
+      }),
+    ]);
+
+    const actualByMonth = Array(12).fill(0);
+    [...payments, ...expenses, ...invoicePayments].forEach((row) => {
+      const m = new Date(row.date).getMonth();
+      if (m >= 0 && m < 12) actualByMonth[m] += parseFloat(row.amount) || 0;
+    });
+
+    const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+    const planned = months.map((_, i) => +(monthlyPlanned * (i + 1)).toFixed(2)); // cumulative planned
+    let running = 0;
+    const cumulativeActual = actualByMonth.map((v) => {
+      running += v;
+      return +running.toFixed(2);
+    });
+
+    return successResponse(res, {
+      year,
+      months,
+      planned,
+      actual: actualByMonth.map((v) => +v.toFixed(2)),
+      cumulativeActual,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
 exports.upsertBudget = async (req, res, next) => {
   try {
     const { projectId } = req.params;

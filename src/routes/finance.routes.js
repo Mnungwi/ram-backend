@@ -20,6 +20,7 @@ router.post("/projects/:projectId/finance/budget", authenticate, fc.upsertBudget
 router.delete("/projects/:projectId/finance/budget/:budgetId", authenticate, fc.deleteBudget);
 router.get("/projects/:projectId/finance/budget/:budgetId/detail", authenticate, fc.getBudgetDetail);
 router.get("/projects/:projectId/finance/report", authenticate, fc.getBudgetReport);
+router.get("/projects/:projectId/finance/cashflow", authenticate, fc.getCashFlow);
 
 // ── Payments ──
 router.get("/projects/:projectId/finance/payments", authenticate, fc.listPayments);
