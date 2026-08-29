@@ -143,10 +143,15 @@ sequelize.query(
 ).then(() => console.log("✅ official_letters: status enum widened to include 'Pending Signature'."))
   .catch((err) => console.error("⚠️ official_letters status enum migration failed:", err.message));
 
-// Forward-for-signature columns
-sequelize.query("ALTER TABLE official_letters ADD COLUMN forwardedToId CHAR(36) NULL;").catch(() => {});
-sequelize.query("ALTER TABLE official_letters ADD COLUMN forwardedById CHAR(36) NULL;").catch(() => {});
+// Forward-for-signature columns — collation MUST match users.id (utf8mb4_bin) or the
+// belongsTo(User) foreign key Sequelize adds on sync({alter:true}) fails with errno 150.
+sequelize.query("ALTER TABLE official_letters ADD COLUMN forwardedToId CHAR(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NULL;").catch(() => {});
+sequelize.query("ALTER TABLE official_letters ADD COLUMN forwardedById CHAR(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NULL;").catch(() => {});
 sequelize.query("ALTER TABLE official_letters ADD COLUMN forwardedAt DATETIME NULL;").catch(() => {});
+// One-time repair for columns already created (on servers that ran the migration
+// before this collation fix) — MODIFY is a no-op if already correct.
+sequelize.query("ALTER TABLE official_letters MODIFY COLUMN forwardedToId CHAR(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NULL;").catch(() => {});
+sequelize.query("ALTER TABLE official_letters MODIFY COLUMN forwardedById CHAR(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NULL;").catch(() => {});
 
 // ─── LETTER COMMENT (notes left when signing / forwarding / reviewing) ─────────
 const LetterComment = sequelize.define(
@@ -161,7 +166,14 @@ const LetterComment = sequelize.define(
     },
     comment: { type: DataTypes.TEXT, allowNull: false },
   },
-  { tableName: "letter_comments", updatedAt: false },
+  {
+    tableName: "letter_comments",
+    updatedAt: false,
+    // Match users.id / official_letters.id (utf8mb4_bin) so the FK constraints
+    // Sequelize adds on sync({alter:true}) don't fail with errno 150.
+    charset: "utf8mb4",
+    collate: "utf8mb4_bin",
+  },
 );
 
 module.exports = { OfficialLetter, LetterComment, STATUS_VALUES };
