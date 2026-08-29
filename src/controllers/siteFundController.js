@@ -3,10 +3,12 @@ const {
   SiteFundDisbursement,
   Expense,
   ExpenseCategory,
+  Payment,
   ProjectStorekeeper,
   User,
   Project,
 } = require("../models/index");
+const { Technician } = require("../models/technician.model");
 const {
   successResponse,
   errorResponse,
@@ -199,6 +201,77 @@ exports.getMyBalance = async (req, res, next) => {
 
     const summary = await buildStorekeeperSummary(projectId, req.userId, req.query);
     return successResponse(res, summary, "Your site fund balance retrieved");
+  } catch (err) {
+    next(err);
+  }
+};
+
+// GET /api/projects/:projectId/site-fund/summary?dateFrom&dateTo
+// Whole-project financial summary: money received (all storekeepers) → materials
+// (expenses, by category) → payments (to contractors/suppliers). Printable/exportable.
+exports.getSummaryReport = async (req, res, next) => {
+  try {
+    const { projectId } = req.params;
+    const project = await Project.findByPk(projectId, { attributes: ["id", "name", "projectCode"] });
+    if (!project) return errorResponse(res, "Project not found", 404);
+
+    const dateWhere = dateRangeWhere(req.query);
+
+    const [disbursements, expenses, payments] = await Promise.all([
+      SiteFundDisbursement.findAll({
+        where: { projectId, ...dateWhere },
+        include: [
+          { model: User, as: "storekeeper", attributes: STOREKEEPER_ATTRS },
+          { model: User, as: "disbursedBy", attributes: STOREKEEPER_ATTRS },
+        ],
+        order: [["date", "ASC"]],
+      }),
+      Expense.findAll({
+        where: { projectId, ...dateWhere },
+        include: [
+          { model: ExpenseCategory, as: "category", attributes: ["id", "name"] },
+          { model: User, as: "createdBy", attributes: STOREKEEPER_ATTRS },
+        ],
+        order: [["date", "ASC"]],
+      }),
+      Payment.findAll({
+        where: { projectId, ...dateWhere },
+        include: [{ model: Technician, as: "paidTo", attributes: ["id", "name", "phone"] }],
+        order: [["date", "ASC"]],
+      }),
+    ]);
+
+    const receivedTotal = disbursements.reduce((s, d) => s + parseFloat(d.amount), 0);
+    const receivedByStorekeeper = Object.values(
+      disbursements.reduce((acc, d) => {
+        const key = d.storekeeperUserId;
+        if (!acc[key]) acc[key] = { storekeeper: d.storekeeper, amount: 0 };
+        acc[key].amount += parseFloat(d.amount);
+        return acc;
+      }, {}),
+    ).map((r) => ({ ...r, amount: +r.amount.toFixed(2) }));
+
+    const materialsTotal = expenses.reduce((s, e) => s + parseFloat(e.amount), 0);
+    const materialsByCategory = Object.values(
+      expenses.reduce((acc, e) => {
+        const key = e.category?.name || "Uncategorized";
+        if (!acc[key]) acc[key] = { category: key, amount: 0 };
+        acc[key].amount += parseFloat(e.amount);
+        return acc;
+      }, {}),
+    )
+      .map((r) => ({ ...r, amount: +r.amount.toFixed(2) }))
+      .sort((a, b) => b.amount - a.amount);
+
+    const paymentsTotal = payments.reduce((s, p) => s + parseFloat(p.amount), 0);
+
+    return successResponse(res, {
+      project,
+      period: { from: req.query.dateFrom || null, to: req.query.dateTo || null },
+      received: { total: +receivedTotal.toFixed(2), byStorekeeper: receivedByStorekeeper, items: disbursements },
+      materials: { total: +materialsTotal.toFixed(2), byCategory: materialsByCategory, items: expenses },
+      payments: { total: +paymentsTotal.toFixed(2), items: payments },
+    }, "Site fund summary report retrieved");
   } catch (err) {
     next(err);
   }

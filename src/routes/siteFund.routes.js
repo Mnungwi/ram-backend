@@ -15,6 +15,7 @@ router.get("/projects/:projectId/site-fund/my-balance", sfc.getMyBalance);
 
 // Finance/admin views — require real finance permissions
 router.get("/projects/:projectId/site-fund/balance", authorize(P.FINANCE_VIEW), sfc.getBalance);
+router.get("/projects/:projectId/site-fund/summary", authorize(P.FINANCE_VIEW), sfc.getSummaryReport);
 router.get("/projects/:projectId/site-fund/disbursements", authorize(P.FINANCE_VIEW), sfc.listDisbursements);
 router.post("/projects/:projectId/site-fund/disbursements", authorize(P.FINANCE_CREATE), sfc.createDisbursement);
 router.delete("/projects/:projectId/site-fund/disbursements/:id", authorize(P.FINANCE_DELETE), sfc.deleteDisbursement);
