@@ -28,6 +28,36 @@ function dateRangeWhere(query) {
   return { date: where };
 }
 
+const isLabour = (categoryName) => (categoryName || "").trim().toLowerCase() === "labour";
+
+// Split a flat expense list into { materials, labour } — Labour (casual site
+// workers paid in cash) is tracked separately from other Materials categories
+// per the user's request, even though both come out of the same site fund.
+function splitByLabour(expenses) {
+  const materials = [];
+  const labour = [];
+  for (const e of expenses) {
+    if (isLabour(e.category?.name)) labour.push(e);
+    else materials.push(e);
+  }
+  return { materials, labour };
+}
+
+function summarizeExpenses(expenses) {
+  const total = expenses.reduce((s, e) => s + parseFloat(e.amount), 0);
+  const byCategory = Object.values(
+    expenses.reduce((acc, e) => {
+      const key = e.category?.name || "Uncategorized";
+      if (!acc[key]) acc[key] = { category: key, amount: 0 };
+      acc[key].amount += parseFloat(e.amount);
+      return acc;
+    }, {}),
+  )
+    .map((r) => ({ ...r, amount: +r.amount.toFixed(2) }))
+    .sort((a, b) => b.amount - a.amount);
+  return { total: +total.toFixed(2), byCategory, items: expenses };
+}
+
 // Build the {received, spent, balance, expenseBreakdown, transactions} summary
 // for ONE storekeeper on ONE project, over an optional date range.
 async function buildStorekeeperSummary(projectId, storekeeperUserId, query) {
@@ -56,6 +86,8 @@ async function buildStorekeeperSummary(projectId, storekeeperUserId, query) {
     .sort((a, b) => b[1] - a[1])
     .map(([category, amount]) => ({ category, amount: +amount.toFixed(2) }));
 
+  const { materials, labour } = splitByLabour(expenses);
+
   return {
     received: +received.toFixed(2),
     spent: +spent.toFixed(2),
@@ -63,6 +95,8 @@ async function buildStorekeeperSummary(projectId, storekeeperUserId, query) {
     expenseBreakdown,
     disbursements,
     expenses,
+    materials: summarizeExpenses(materials),
+    labour: summarizeExpenses(labour),
   };
 }
 
@@ -251,25 +285,15 @@ exports.getSummaryReport = async (req, res, next) => {
       }, {}),
     ).map((r) => ({ ...r, amount: +r.amount.toFixed(2) }));
 
-    const materialsTotal = expenses.reduce((s, e) => s + parseFloat(e.amount), 0);
-    const materialsByCategory = Object.values(
-      expenses.reduce((acc, e) => {
-        const key = e.category?.name || "Uncategorized";
-        if (!acc[key]) acc[key] = { category: key, amount: 0 };
-        acc[key].amount += parseFloat(e.amount);
-        return acc;
-      }, {}),
-    )
-      .map((r) => ({ ...r, amount: +r.amount.toFixed(2) }))
-      .sort((a, b) => b.amount - a.amount);
-
+    const { materials, labour } = splitByLabour(expenses);
     const paymentsTotal = payments.reduce((s, p) => s + parseFloat(p.amount), 0);
 
     return successResponse(res, {
       project,
       period: { from: req.query.dateFrom || null, to: req.query.dateTo || null },
       received: { total: +receivedTotal.toFixed(2), byStorekeeper: receivedByStorekeeper, items: disbursements },
-      materials: { total: +materialsTotal.toFixed(2), byCategory: materialsByCategory, items: expenses },
+      materials: summarizeExpenses(materials),
+      labour: summarizeExpenses(labour),
       payments: { total: +paymentsTotal.toFixed(2), items: payments },
     }, "Site fund summary report retrieved");
   } catch (err) {
