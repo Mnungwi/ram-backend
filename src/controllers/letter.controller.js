@@ -2,7 +2,7 @@ const fs = require("fs");
 const path = require("path");
 const PDFDocument = require("pdfkit");
 const { LETTERS_DIR, DOCUMENTS_DIR, MEDIA_DIR, UPLOADS_ROOT } = require("../config/uploadPaths");
-const { OfficialLetter } = require("../models/letter.model");
+const { OfficialLetter, LetterComment } = require("../models/letter.model");
 const { Document } = require("../models/document.model");
 const { User, Stakeholder, Project } = require("../models/index");
 const { sendLetterEmail } = require("../utils/mailer");
@@ -12,6 +12,7 @@ const {
   paginatedResponse,
   getPagination,
 } = require("../utils/response");
+const { audit } = require("../utils/audit");
 const { Op } = require("sequelize");
 
 function resolveAttachmentPath(filePath) {
@@ -159,6 +160,20 @@ const USER_INCLUDES = [
   { model: User, as: "sender", attributes: ["id", "firstName", "lastName", "email", "jobTitle", "department"] },
   { model: Stakeholder, as: "recipient", attributes: ["id", "name", "organization", "jobTitle", "email", "phone"] },
   { model: Project, as: "project", attributes: ["id", "name", "projectCode"] },
+  { model: User, as: "forwardedTo", attributes: ["id", "firstName", "lastName", "email"] },
+  { model: User, as: "forwardedBy", attributes: ["id", "firstName", "lastName"] },
+];
+
+// Extra includes only needed on the single-letter detail view (list views skip these for speed)
+const DETAIL_INCLUDES = [
+  ...USER_INCLUDES,
+  {
+    model: LetterComment,
+    as: "comments",
+    include: [{ model: User, as: "user", attributes: ["id", "firstName", "lastName"] }],
+    separate: true,
+    order: [["createdAt", "ASC"]],
+  },
 ];
 
 const generateLetterNo = async (projectId) => {
@@ -324,7 +339,7 @@ const formatLetterResponse = async (letter) => {
 // GET /api/letters/:letterId
 exports.getLetter = async (req, res, next) => {
   try {
-    const letter = await OfficialLetter.findByPk(req.params.letterId, { include: USER_INCLUDES });
+    const letter = await OfficialLetter.findByPk(req.params.letterId, { include: DETAIL_INCLUDES });
     if (!letter) return errorResponse(res, "Letter not found", 404);
     const letterData = await formatLetterResponse(letter);
     return successResponse(res, { letter: letterData });
@@ -524,20 +539,110 @@ exports.submitLetter = async (req, res, next) => {
   }
 };
 
-// POST /api/letters/:letterId/approve
+// POST /api/letters/:letterId/approve  (alias: /sign — signs the letter directly, either
+// by the original creator/authorized signer, or by whoever it was forwarded to)
 exports.approveLetter = async (req, res, next) => {
   try {
     const letter = await OfficialLetter.findByPk(req.params.letterId);
     if (!letter) return errorResponse(res, "Letter not found", 404);
-    if (letter.status !== "Pending Approval")
-      return errorResponse(res, "Only letters pending approval can be approved", 400);
+    if (!["Pending Approval", "Pending Signature"].includes(letter.status))
+      return errorResponse(res, "Only letters pending approval or signature can be signed", 400);
+
+    const { note } = req.body;
+    const oldValues = { status: letter.status };
 
     await letter.update({
       status: "Approved",
       approvedById: req.userId,
       approvedAt: new Date(),
     });
-    return successResponse(res, { letter }, "Letter approved");
+
+    if (note && note.trim()) {
+      await LetterComment.create({ letterId: letter.id, userId: req.userId, type: "sign", comment: note.trim() });
+    }
+
+    await audit({
+      userId: req.userId,
+      action: "sign",
+      resource: "letter",
+      resourceId: letter.id,
+      oldValues,
+      newValues: { status: "Approved" },
+      req,
+      projectId: letter.projectId,
+    });
+
+    return successResponse(res, { letter }, "Letter signed successfully");
+  } catch (err) {
+    next(err);
+  }
+};
+
+// POST /api/letters/:letterId/forward  — hand the letter to another user to review & sign
+// body: { userId, note }
+exports.forwardLetter = async (req, res, next) => {
+  try {
+    const letter = await OfficialLetter.findByPk(req.params.letterId);
+    if (!letter) return errorResponse(res, "Letter not found", 404);
+    if (!["Draft", "Pending Approval", "Pending Signature"].includes(letter.status))
+      return errorResponse(res, "This letter can no longer be forwarded for signature", 400);
+
+    const { userId, note } = req.body;
+    if (!userId) return errorResponse(res, "Please choose who to forward this letter to", 400);
+
+    const signer = await User.findByPk(userId);
+    if (!signer) return errorResponse(res, "Selected user was not found", 404);
+
+    await letter.update({
+      status: "Pending Signature",
+      forwardedToId: userId,
+      forwardedById: req.userId,
+      forwardedAt: new Date(),
+    });
+
+    await LetterComment.create({
+      letterId: letter.id,
+      userId: req.userId,
+      type: "forward",
+      comment: (note && note.trim()) || `Forwarded to ${signer.firstName} ${signer.lastName} for review & signature.`,
+    });
+
+    await audit({
+      userId: req.userId,
+      action: "forward",
+      resource: "letter",
+      resourceId: letter.id,
+      newValues: { forwardedToId: userId, status: "Pending Signature" },
+      req,
+      projectId: letter.projectId,
+    });
+
+    return successResponse(res, { letter }, `Letter forwarded to ${signer.firstName} ${signer.lastName} for signature`);
+  } catch (err) {
+    next(err);
+  }
+};
+
+// POST /api/letters/:letterId/comments — add a standalone note (discussion, not tied to sign/forward)
+exports.addLetterComment = async (req, res, next) => {
+  try {
+    const letter = await OfficialLetter.findByPk(req.params.letterId);
+    if (!letter) return errorResponse(res, "Letter not found", 404);
+
+    const { comment } = req.body;
+    if (!comment || !comment.trim()) return errorResponse(res, "Comment text is required", 400);
+
+    const created = await LetterComment.create({
+      letterId: letter.id,
+      userId: req.userId,
+      type: "note",
+      comment: comment.trim(),
+    });
+    const withUser = await LetterComment.findByPk(created.id, {
+      include: [{ model: User, as: "user", attributes: ["id", "firstName", "lastName"] }],
+    });
+
+    return successResponse(res, { comment: withUser }, "Note added");
   } catch (err) {
     next(err);
   }
@@ -820,6 +925,11 @@ async function buildLetterHtml(letter) {
         <div style="font-weight: bold; text-decoration: underline; min-width: 180px; display: inline-block;">${senderName}</div>
         ${senderPosition ? `<div style="color:#4b5563;font-size:12px;">${senderPosition}</div>` : ""}
         ${senderOrganization ? `<div style="color:#4b5563;font-size:12px;">${senderOrganization}</div>` : ""}
+        ${letter.approvedById && letter.approvedBy ? `
+          <div style="margin-top:10px; font-size:11px; color:#059669; font-style:italic;">
+            ✓ Digitally signed by ${letter.approvedBy.firstName} ${letter.approvedBy.lastName} on ${new Date(letter.approvedAt).toLocaleDateString("en-GB", { day: "2-digit", month: "long", year: "numeric" })}
+          </div>
+        ` : ""}
       </div>
       <!-- CC -->
       ${
@@ -946,11 +1056,23 @@ exports.downloadLetterPdf = async (req, res, next) => {
       }
     });
 
-    // Header
+    // ── LETTERHEAD ──
+    doc.fontSize(24).font("Helvetica-Bold").fillColor("#1a56db").text("UNITED", 50, 50, { continued: false });
+    doc.fontSize(9).font("Helvetica-Oblique").fillColor("#4b5563").text("Engineering & Technical Services", 50, doc.y);
+
+    doc.fontSize(11).font("Helvetica-Bold").fillColor("#1f2937").text("United Construction Group", 300, 50, { width: 245, align: "right" });
+    doc.fontSize(9).font("Helvetica").fillColor("#4b5563")
+      .text("P.O. Box 12345, Dar es Salaam, Tanzania", 300, doc.y, { width: 245, align: "right" })
+      .text("Tel: +255 22 212 3456 | info@united.co.tz", 300, doc.y, { width: 245, align: "right" })
+      .text("www.united.co.tz", 300, doc.y, { width: 245, align: "right" });
+
+    doc.moveTo(50, 118).lineTo(545, 118).strokeColor("#1a56db").lineWidth(3).stroke();
+    doc.y = 130;
+
+    // Ref / Date
     doc.fontSize(9).fillColor("#6b7280")
       .text(`Ref: ${letter.letterNo || "DRAFT"}`, { continued: false })
       .text(`Date: ${new Date(letter.letterDate || letter.createdAt || Date.now()).toLocaleDateString("en-GB", { day: "2-digit", month: "long", year: "numeric" })}`);
-    doc.moveTo(50, doc.y + 5).lineTo(545, doc.y + 5).strokeColor("#1a56db").lineWidth(2).stroke();
     doc.moveDown(1.5);
 
     // To
@@ -973,9 +1095,17 @@ exports.downloadLetterPdf = async (req, res, next) => {
     doc.moveDown(3);
 
     // Sender
-    doc.fontSize(11).text(senderName);
+    doc.fillColor("#111827").font("Helvetica-Bold").fontSize(11).text(senderName);
+    doc.font("Helvetica");
     if (senderPosition) doc.fontSize(9).fillColor("#6b7280").text(senderPosition);
     if (senderOrganization) doc.fontSize(9).fillColor("#6b7280").text(senderOrganization);
+
+    if (letter.approvedById && letter.approvedBy) {
+      const signedName = `${letter.approvedBy.firstName || ""} ${letter.approvedBy.lastName || ""}`.trim();
+      doc.moveDown(0.5);
+      doc.fontSize(8).font("Helvetica-Oblique").fillColor("#059669")
+        .text(`✓ Digitally signed by ${signedName} on ${new Date(letter.approvedAt).toLocaleDateString("en-GB", { day: "2-digit", month: "long", year: "numeric" })}`);
+    }
     doc.moveDown();
 
     // CC List at the bottom

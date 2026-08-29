@@ -1,7 +1,7 @@
 const { DataTypes } = require("sequelize");
 const { sequelize } = require("../config/database");
 
-const STATUS_VALUES = ["Draft", "Pending Approval", "Approved", "Sent", "Archived"];
+const STATUS_VALUES = ["Draft", "Pending Approval", "Pending Signature", "Approved", "Sent", "Archived"];
 
 const OfficialLetter = sequelize.define(
   "OfficialLetter",
@@ -55,6 +55,11 @@ const OfficialLetter = sequelize.define(
     approvedAt: { type: DataTypes.DATE, allowNull: true },
     sentById: { type: DataTypes.UUID, allowNull: true },
     sentAt: { type: DataTypes.DATE, allowNull: true },
+
+    // ── FORWARD FOR SIGNATURE (secretary drafts, boss/another user reviews & signs) ──
+    forwardedToId: { type: DataTypes.UUID, allowNull: true },
+    forwardedById: { type: DataTypes.UUID, allowNull: true },
+    forwardedAt: { type: DataTypes.DATE, allowNull: true },
 
     emailMessageId: { type: DataTypes.STRING(255), allowNull: true }, // ID ya email iliyotumwa (kwa rejea)
     emailError: { type: DataTypes.TEXT, allowNull: true }, // kama kutuma kulishindikana
@@ -132,4 +137,31 @@ sequelize.query("ALTER TABLE official_letters ADD COLUMN letterDate DATE NULL;")
 sequelize.query("ALTER TABLE official_letters ADD COLUMN priority ENUM('low', 'normal', 'high', 'urgent') DEFAULT 'normal';")
   .catch(() => {});
 
-module.exports = { OfficialLetter, STATUS_VALUES };
+// Widen status enum to include 'Pending Signature' (forward-for-signature workflow)
+sequelize.query(
+  "ALTER TABLE official_letters MODIFY COLUMN status ENUM('Draft','Pending Approval','Pending Signature','Approved','Sent','Archived') DEFAULT 'Draft';"
+).then(() => console.log("✅ official_letters: status enum widened to include 'Pending Signature'."))
+  .catch((err) => console.error("⚠️ official_letters status enum migration failed:", err.message));
+
+// Forward-for-signature columns
+sequelize.query("ALTER TABLE official_letters ADD COLUMN forwardedToId CHAR(36) NULL;").catch(() => {});
+sequelize.query("ALTER TABLE official_letters ADD COLUMN forwardedById CHAR(36) NULL;").catch(() => {});
+sequelize.query("ALTER TABLE official_letters ADD COLUMN forwardedAt DATETIME NULL;").catch(() => {});
+
+// ─── LETTER COMMENT (notes left when signing / forwarding / reviewing) ─────────
+const LetterComment = sequelize.define(
+  "LetterComment",
+  {
+    id: { type: DataTypes.UUID, defaultValue: DataTypes.UUIDV4, primaryKey: true },
+    letterId: { type: DataTypes.UUID, allowNull: false },
+    userId: { type: DataTypes.UUID, allowNull: true },
+    type: {
+      type: DataTypes.ENUM("note", "sign", "forward"),
+      defaultValue: "note",
+    },
+    comment: { type: DataTypes.TEXT, allowNull: false },
+  },
+  { tableName: "letter_comments", updatedAt: false },
+);
+
+module.exports = { OfficialLetter, LetterComment, STATUS_VALUES };

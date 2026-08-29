@@ -10,7 +10,7 @@ const {
   Supplier, BudgetItem,
   Report, TeamMember, AuditLog, Client
 } = require('./domain');
-const { OfficialLetter } = require('./letter.model');
+const { OfficialLetter, LetterComment } = require('./letter.model');
 const { CentralStoreItem, ProjectStoreItem, StoreTransaction } = require('./store.model');
 const {
   Requisition,
@@ -149,6 +149,11 @@ OfficialLetter.belongsTo(User, { foreignKey: 'approvedById', as: 'approvedBy' })
 OfficialLetter.belongsTo(User, { foreignKey: 'sentById', as: 'sentBy' });
 OfficialLetter.belongsTo(User, { foreignKey: 'senderId', as: 'sender' });
 OfficialLetter.belongsTo(Stakeholder, { foreignKey: 'recipientId', as: 'recipient' });
+OfficialLetter.belongsTo(User, { foreignKey: 'forwardedToId', as: 'forwardedTo' });
+OfficialLetter.belongsTo(User, { foreignKey: 'forwardedById', as: 'forwardedBy' });
+OfficialLetter.hasMany(LetterComment, { foreignKey: 'letterId', as: 'comments' });
+LetterComment.belongsTo(OfficialLetter, { foreignKey: 'letterId', as: 'letter' });
+LetterComment.belongsTo(User, { foreignKey: 'userId', as: 'user' });
 // Requisition ↔ Project
 Project.hasMany(Requisition, { foreignKey: 'projectId', as: 'requisitions' });
 Requisition.belongsTo(Project, { foreignKey: 'projectId', as: 'project' });

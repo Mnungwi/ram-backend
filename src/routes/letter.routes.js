@@ -25,6 +25,9 @@ router.delete("/letters/:letterId", authenticate, lc.deleteLetter);
 
 router.post("/letters/:letterId/submit", authenticate, lc.submitLetter);
 router.post("/letters/:letterId/approve", authenticate, lc.approveLetter);
+router.post("/letters/:letterId/sign", authenticate, lc.approveLetter); // alias — same action, clearer name for the sign workflow
+router.post("/letters/:letterId/forward", authenticate, lc.forwardLetter);
+router.post("/letters/:letterId/comments", authenticate, lc.addLetterComment);
 router.post("/letters/:letterId/send", authenticate, lc.sendLetter);
 router.post("/letters/:letterId/archive", authenticate, lc.archiveLetter);
 router.get("/letters/:letterId/attachment/file", lc.downloadAttachment);
