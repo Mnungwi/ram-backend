@@ -156,8 +156,11 @@ router.get("/gallery", async (req, res, next) => {
   try {
     const { projectId } = req.query;
     const { sequelize } = require("../config/database");
+    // Was hardcoded to http://localhost:3000 — broke in production (images
+    // pointed at the visitor's own machine instead of the live API).
+    const publicBaseUrl = process.env.PUBLIC_BASE_URL || "http://localhost:3000";
     let query = `
-      SELECT CONCAT('http://localhost:3000/uploads/media/', m.filename) AS imageUrl, 
+      SELECT CONCAT('${publicBaseUrl}/uploads/media/', m.filename) AS imageUrl,
              g.caption, g.type, g.visibility, g.displayOrder, g.id, g.projectId
       FROM project_gallery g
       JOIN media_library m ON g.mediaId = m.id

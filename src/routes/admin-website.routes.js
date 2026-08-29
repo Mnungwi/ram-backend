@@ -15,8 +15,9 @@ router.use(authenticate);
 // GET all gallery items
 router.get("/gallery", async (req, res, next) => {
   try {
+    const publicBaseUrl = process.env.PUBLIC_BASE_URL || "http://localhost:3000";
     const [gallery] = await sequelize.query(`
-      SELECT CONCAT('http://localhost:3000/uploads/media/', m.filename) AS imageUrl, 
+      SELECT CONCAT('${publicBaseUrl}/uploads/media/', m.filename) AS imageUrl,
              g.caption, g.type, g.visibility, g.displayOrder, g.id, p.name AS projectName
       FROM project_gallery g
       JOIN media_library m ON g.mediaId = m.id
