@@ -538,9 +538,14 @@ exports.updateLetter = async (req, res, next) => {
     if (req.body.toOrg) updateData.recipientOrganization = req.body.toOrg;
     if (req.body.toEmail) updateData.recipientEmail = req.body.toEmail;
 
-    if (req.body.ccRecipients) {
+    // The sidebar Compose form sends CC under "ccRecipients"; the
+    // project-tab Letters compose form (tabs/letters/letters.component.ts)
+    // sends it under "ccList" instead — accept either key so editing a
+    // letter from either screen actually saves its CC list.
+    const rawUpdateCc = req.body.ccRecipients ?? req.body.ccList;
+    if (rawUpdateCc) {
       try {
-        updateData.ccList = typeof req.body.ccRecipients === "string" ? JSON.parse(req.body.ccRecipients) : req.body.ccRecipients;
+        updateData.ccList = typeof rawUpdateCc === "string" ? JSON.parse(rawUpdateCc) : rawUpdateCc;
       } catch (e) {}
     }
 
