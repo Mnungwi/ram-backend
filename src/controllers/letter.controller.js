@@ -5,6 +5,7 @@ const { LETTERS_DIR, DOCUMENTS_DIR, MEDIA_DIR, UPLOADS_ROOT } = require("../conf
 const { OfficialLetter, LetterComment } = require("../models/letter.model");
 const { Document } = require("../models/document.model");
 const { User, Stakeholder, Project } = require("../models/index");
+const { sequelize } = require("../config/database");
 const { sendLetterEmail } = require("../utils/mailer");
 const {
   successResponse,
@@ -14,6 +15,40 @@ const {
 } = require("../utils/response");
 const { audit } = require("../utils/audit");
 const { Op } = require("sequelize");
+
+// The Letters PDF/preview letterhead used to be 100% hardcoded to a fake
+// company ("UNITED" / "United Construction Group" / a Dar es Salaam
+// address that isn't this company's) — completely disconnected from the
+// real, DB-driven branding (website_settings) used everywhere else in the
+// app (Contact page, Website Content admin). Cached briefly since this
+// runs on every preview/download and rarely changes.
+let brandingCache = null;
+let brandingCacheAt = 0;
+async function getCompanyBranding() {
+  if (brandingCache && Date.now() - brandingCacheAt < 60000) return brandingCache;
+  try {
+    const [rows] = await sequelize.query("SELECT `key`, `value` FROM website_settings");
+    const dict = {};
+    for (const row of rows) dict[row.key] = row.value;
+    brandingCache = {
+      name: dict.site_title || "United Ram Construction Company Limited",
+      logo: dict.site_logo || null,
+      address: dict.contact_address || "Mbweni, Zanzibar, Tanzania",
+      phone: dict.contact_phone || "+255 777 412 337",
+      email: dict.contact_email || "info@unitedram.com",
+    };
+    brandingCacheAt = Date.now();
+  } catch (e) {
+    brandingCache = {
+      name: "United Ram Construction Company Limited",
+      logo: null,
+      address: "Mbweni, Zanzibar, Tanzania",
+      phone: "+255 777 412 337",
+      email: "info@unitedram.com",
+    };
+  }
+  return brandingCache;
+}
 
 function resolveAttachmentPath(filePath) {
   if (!filePath) return null;
@@ -473,10 +508,26 @@ exports.updateLetter = async (req, res, next) => {
   try {
     const letter = await OfficialLetter.findByPk(req.params.letterId);
     if (!letter) return errorResponse(res, "Letter not found", 404);
-    if (letter.status === "Sent")
-      return errorResponse(res, "Cannot edit a letter that has already been sent", 400);
+    if (["Sent", "Archived"].includes(letter.status))
+      return errorResponse(res, "Cannot edit a letter that has already been sent/archived", 400);
+
+    // Editing a letter that was already Approved or forwarded for
+    // signature changes its content — any existing signature/approval no
+    // longer validly applies to the new text, so it goes back to Draft and
+    // has to be re-approved/re-signed rather than silently keeping a
+    // signature that was actually given for different wording (e.g. after
+    // a reviewer's comment asks for a change).
+    const wasSignedOrPending = ["Approved", "Pending Signature"].includes(letter.status);
 
     const updateData = { ...req.body };
+    if (wasSignedOrPending) {
+      updateData.status = "Draft";
+      updateData.approvedById = null;
+      updateData.approvedAt = null;
+      updateData.forwardedToId = null;
+      updateData.forwardedById = null;
+      updateData.forwardedAt = null;
+    }
     if (req.body.fromName) updateData.senderName = req.body.fromName;
     if (req.body.fromTitle) updateData.senderPosition = req.body.fromTitle;
     if (req.body.fromOrg) updateData.senderOrganization = req.body.fromOrg;
@@ -863,11 +914,13 @@ function letterHasVisibleSignature(letter) {
 }
 
 async function buildLetterHtml(letter) {
+  const branding = await getCompanyBranding();
+
   // Resolve Sender Details
-  const senderName = letter.sender ? `${letter.sender.firstName} ${letter.sender.lastName}` : (letter.senderName || "United");
-  const senderPosition = letter.sender ? letter.sender.jobTitle : (letter.senderPosition || "Project Director");
-  const senderOrganization = letter.sender ? (letter.sender.department || "United") : (letter.senderOrganization || "United");
-  const senderEmail = letter.sender ? letter.sender.email : (letter.senderEmail || "info@united.co.tz");
+  const senderName = letter.sender ? `${letter.sender.firstName} ${letter.sender.lastName}` : (letter.senderName || branding.name);
+  const senderPosition = letter.sender ? letter.sender.jobTitle : (letter.senderPosition || "");
+  const senderOrganization = letter.sender ? (letter.sender.department || branding.name) : (letter.senderOrganization || branding.name);
+  const senderEmail = letter.sender ? letter.sender.email : (letter.senderEmail || branding.email);
 
   // Resolve Recipient Details
   const recipientName = letter.recipient ? letter.recipient.name : (letter.recipientName || "");
@@ -945,17 +998,15 @@ async function buildLetterHtml(letter) {
 
   return `
     <div style="font-family: 'Times New Roman', Times, serif; max-width: 800px; margin: 0 auto; padding: 40px; border: 1px solid #e5e7eb; background: #fff; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); color: #111827;">
-      <!-- LETTERHEAD -->
+      <!-- LETTERHEAD — real, DB-driven company branding (Website Content > Branding & Contact Info), not a hardcoded placeholder company -->
       <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 3px solid #1a56db; padding-bottom: 15px; margin-bottom: 25px;">
-        <div>
-          <div style="font-size: 26px; font-weight: 800; color: #1a56db; letter-spacing: 1px;">UNITED</div>
-          <div style="font-size: 10px; color: #4b5563; font-style: italic; margin-top: 2px;">Engineering & Technical Services</div>
+        <div style="display:flex; align-items:center; gap:12px;">
+          ${branding.logo ? `<img src="${branding.logo}" style="height:40px; width:auto; object-fit:contain;" />` : ""}
+          <div style="font-size: 20px; font-weight: 800; color: #1a56db; letter-spacing: 0.5px;">${branding.name}</div>
         </div>
         <div style="text-align: right; font-size: 11px; color: #4b5563; line-height: 1.5;">
-          <div style="font-weight: bold; color: #1f2937; font-size: 12px;">United Construction Group</div>
-          <div>P.O. Box 12345, Dar es Salaam, Tanzania</div>
-          <div>Tel: +255 22 212 3456 | Email: info@united.co.tz</div>
-          <div>Website: www.united.co.tz</div>
+          <div>${branding.address}</div>
+          <div>Tel: ${branding.phone} | Email: ${branding.email}</div>
         </div>
       </div>
       <!-- REF & DATE -->
@@ -1029,11 +1080,13 @@ exports.downloadLetterPdf = async (req, res, next) => {
     const letter = await OfficialLetter.findByPk(req.params.letterId, { include: USER_INCLUDES });
     if (!letter) return errorResponse(res, "Letter not found", 404);
 
+    const branding = await getCompanyBranding();
+
     // Resolve Sender Details
-    const senderName = letter.sender ? `${letter.sender.firstName} ${letter.sender.lastName}` : (letter.senderName || "United");
-    const senderPosition = letter.sender ? letter.sender.jobTitle : (letter.senderPosition || "Project Director");
-    const senderOrganization = letter.sender ? (letter.sender.department || "United") : (letter.senderOrganization || "United");
-    const senderEmail = letter.sender ? letter.sender.email : (letter.senderEmail || "info@united.co.tz");
+    const senderName = letter.sender ? `${letter.sender.firstName} ${letter.sender.lastName}` : (letter.senderName || branding.name);
+    const senderPosition = letter.sender ? letter.sender.jobTitle : (letter.senderPosition || "");
+    const senderOrganization = letter.sender ? (letter.sender.department || branding.name) : (letter.senderOrganization || branding.name);
+    const senderEmail = letter.sender ? letter.sender.email : (letter.senderEmail || branding.email);
 
     // Resolve Recipient Details
     const recipientName = letter.recipient ? letter.recipient.name : (letter.recipientName || "");
@@ -1122,15 +1175,26 @@ exports.downloadLetterPdf = async (req, res, next) => {
       }
     });
 
-    // ── LETTERHEAD ──
-    doc.fontSize(24).font("Helvetica-Bold").fillColor("#1a56db").text("UNITED", 50, 50, { continued: false });
-    doc.fontSize(9).font("Helvetica-Oblique").fillColor("#4b5563").text("Engineering & Technical Services", 50, doc.y);
+    // ── LETTERHEAD — real, DB-driven company branding, not a hardcoded placeholder company ──
+    let logoDrawn = false;
+    if (branding.logo) {
+      const logoPath = resolveAttachmentPath(branding.logo.replace(/^\//, ""));
+      if (logoPath) {
+        try {
+          doc.image(logoPath, 50, 45, { height: 32 });
+          logoDrawn = true;
+        } catch (e) {
+          // corrupt/unsupported image — fall back to text-only letterhead below
+        }
+      }
+    }
+    doc.fontSize(16).font("Helvetica-Bold").fillColor("#1a56db")
+      .text(branding.name, logoDrawn ? 90 : 50, 55, { width: logoDrawn ? 205 : 245 });
 
-    doc.fontSize(11).font("Helvetica-Bold").fillColor("#1f2937").text("United Construction Group", 300, 50, { width: 245, align: "right" });
     doc.fontSize(9).font("Helvetica").fillColor("#4b5563")
-      .text("P.O. Box 12345, Dar es Salaam, Tanzania", 300, doc.y, { width: 245, align: "right" })
-      .text("Tel: +255 22 212 3456 | info@united.co.tz", 300, doc.y, { width: 245, align: "right" })
-      .text("www.united.co.tz", 300, doc.y, { width: 245, align: "right" });
+      .text(branding.address, 300, 50, { width: 245, align: "right" })
+      .text(`Tel: ${branding.phone} | ${branding.email}`, 300, doc.y, { width: 245, align: "right" });
+    doc.y = 90;
 
     doc.moveTo(50, 118).lineTo(545, 118).strokeColor("#1a56db").lineWidth(3).stroke();
     doc.y = 130;
