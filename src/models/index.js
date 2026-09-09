@@ -26,6 +26,7 @@ const { ProjectGallery } = require("./gallery.model");
 const { Technician, TechnicianCategory, TechnicianReceipt, ProjectTechnician } = require("./technician.model");
 const { ProjectStorekeeper } = require("./storekeeper.model");
 const { Subcontractor, SubcontractorDocument } = require("./subcontractor.model");
+const { SafetyRecord, SafetyDocument } = require("./safety.model");
 const { Budget, Payment, Invoice, InvoicePayment, Expense, ExpenseCategory, FundingSource, SiteFundDisbursement } = require('./finance.model');
 const { Inquiry } = require("./inquiry.model");
 const { JobApplication } = require("./jobApplication.model");
@@ -271,6 +272,15 @@ Subcontractor.belongsTo(Project, { foreignKey: "projectId", as: "project" });
 Subcontractor.belongsTo(User, { foreignKey: "createdById", as: "createdBy" });
 SubcontractorDocument.belongsTo(User, { foreignKey: "uploadedById", as: "uploadedBy" });
 
+// ─── SAFETY ASSOCIATIONS ────────────────────────────────────────────────────
+Project.hasMany(SafetyRecord, { foreignKey: "projectId", as: "safetyRecords" });
+SafetyRecord.belongsTo(Project, { foreignKey: "projectId", as: "project" });
+SafetyRecord.belongsTo(User, { foreignKey: "reportedById", as: "reportedBy" });
+SafetyRecord.belongsTo(User, { foreignKey: "createdById", as: "createdBy" });
+Project.hasMany(SafetyDocument, { foreignKey: "projectId", as: "safetyDocuments" });
+SafetyDocument.belongsTo(Project, { foreignKey: "projectId", as: "project" });
+SafetyDocument.belongsTo(User, { foreignKey: "uploadedById", as: "uploadedBy" });
+
 module.exports = {
   sequelize,
   User,
@@ -322,4 +332,6 @@ module.exports = {
   JobApplication,
   Subcontractor,
   SubcontractorDocument,
+  SafetyRecord,
+  SafetyDocument,
 };
