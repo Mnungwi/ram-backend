@@ -27,6 +27,7 @@ const listUsers = async (req, res, next) => {
       order: [['createdAt', 'DESC']],
       limit,
       offset,
+      distinct: true, // without this, a user with 2+ roles is counted/rowed once per role (duplicate rows + inflated pagination)
     });
 
     return paginatedResponse(res, rows, count, page, limit);
