@@ -10,6 +10,7 @@ router.get(   '/categories',    authorize(P.SUPPLIER_VIEW),   supplierCtrl.listC
 router.get(   '/',              authorize(P.SUPPLIER_VIEW),   supplierCtrl.listSuppliers);
 router.post(  '/',              authorize(P.SUPPLIER_CREATE), supplierCtrl.createSupplier);
 router.get(   '/:supplierId',   authorize(P.SUPPLIER_VIEW),   supplierCtrl.getSupplier);
+router.get(   '/:supplierId/ledger', authorize(P.SUPPLIER_VIEW), supplierCtrl.getSupplierLedger);
 router.put(   '/:supplierId',   authorize(P.SUPPLIER_UPDATE), supplierCtrl.updateSupplier);
 router.delete('/:supplierId',   authorize(P.SUPPLIER_DELETE), supplierCtrl.deleteSupplier);
 
