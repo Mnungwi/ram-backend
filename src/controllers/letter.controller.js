@@ -904,13 +904,21 @@ const stripHtml = (html) => {
 // designated sender) — never just because a secretary picked their name.
 function letterHasVisibleSignature(letter) {
   if (!letter.sender?.signatureImage) return false;
-  const selfSigned = !letter.senderId || letter.senderId === letter.createdById;
-  const delegateApproved =
-    letter.status === "Approved" &&
-    letter.approvedById &&
-    letter.senderId &&
-    letter.approvedById === letter.senderId;
-  return selfSigned || delegateApproved;
+  return letterApprovalIsConsistent(letter);
+}
+
+// True when whoever is recorded as having approved/signed the letter is
+// actually allowed to be shown as its signer: either no delegation
+// happened (senderId unset — the normal single-track submit/approve
+// flow, where anyone with approve rights legitimately signs, e.g. a PM
+// approving a subordinate's letter), or a delegate ("Signing As") who has
+// genuinely approved it themselves. Guards against a stale/edge-case
+// record where a letter was "Signing As" one person but got approved by
+// someone else entirely — that combination should never be presented as
+// "digitally signed", with or without an actual signature image.
+function letterApprovalIsConsistent(letter) {
+  if (!letter.senderId || letter.senderId === letter.createdById) return true;
+  return !!(letter.status === "Approved" && letter.approvedById && letter.approvedById === letter.senderId);
 }
 
 async function buildLetterHtml(letter) {
@@ -1039,10 +1047,10 @@ async function buildLetterHtml(letter) {
         ${senderOrganization ? `<div style="color:#4b5563;font-size:12px;">${senderOrganization}</div>` : ""}
         ${letter.createdBy && letter.senderId && letter.createdById !== letter.senderId ? `
           <div style="margin-top:6px; font-size:10px; color:#9ca3af; font-style:italic;">
-            Prepared on behalf of ${senderName} by ${letter.createdBy.firstName} ${letter.createdBy.lastName}${letter.status !== "Approved" ? " — awaiting their signature" : ""}
+            Prepared on behalf of ${senderName} by ${letter.createdBy.firstName} ${letter.createdBy.lastName}${!letterApprovalIsConsistent(letter) ? " — awaiting their signature" : ""}
           </div>
         ` : ""}
-        ${letter.approvedById && letter.approvedBy ? `
+        ${letter.approvedById && letter.approvedBy && letterApprovalIsConsistent(letter) ? `
           <div style="margin-top:10px; font-size:11px; color:#059669; font-style:italic;">
             ✓ Digitally signed by ${letter.approvedBy.firstName} ${letter.approvedBy.lastName} on ${new Date(letter.approvedAt).toLocaleDateString("en-GB", { day: "2-digit", month: "long", year: "numeric" })}
           </div>
@@ -1255,10 +1263,10 @@ exports.downloadLetterPdf = async (req, res, next) => {
     if (letter.createdBy && letter.senderId && letter.createdById !== letter.senderId) {
       doc.moveDown(0.3);
       doc.fontSize(8).font("Helvetica-Oblique").fillColor("#9ca3af")
-        .text(`Prepared on behalf of ${senderName} by ${letter.createdBy.firstName} ${letter.createdBy.lastName}${letter.status !== "Approved" ? " — awaiting their signature" : ""}`);
+        .text(`Prepared on behalf of ${senderName} by ${letter.createdBy.firstName} ${letter.createdBy.lastName}${!letterApprovalIsConsistent(letter) ? " — awaiting their signature" : ""}`);
     }
 
-    if (letter.approvedById && letter.approvedBy) {
+    if (letter.approvedById && letter.approvedBy && letterApprovalIsConsistent(letter)) {
       const signedName = `${letter.approvedBy.firstName || ""} ${letter.approvedBy.lastName || ""}`.trim();
       doc.moveDown(0.5);
       doc.fontSize(8).font("Helvetica-Oblique").fillColor("#059669")
