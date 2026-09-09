@@ -1,14 +1,23 @@
 const express = require("express");
 const router = express.Router();
 const { sequelize } = require("../config/database");
-const { authenticate } = require("../middleware/auth");
+const { authenticate, authorize } = require("../middleware/auth");
+const { PERMISSIONS: P } = require("../config/permissions");
 const { successResponse, errorResponse } = require("../utils/response");
 const { v4: uuidv4 } = require("uuid");
 const { translateToSw, TRANSLATABLE_JSON_ARRAY_SETTINGS, translateJsonArrayFields } = require("../utils/translate");
 const { TRANSLATABLE_SETTING_KEYS } = require("../config/translatableSettings");
 
-// Enforce authentication on all website management endpoints
+// Was `authenticate`-only — any logged-in user, any role, could read AND
+// write every page of the public website's content. Now requires the
+// Website Manager permissions (website:view / website:update) like every
+// other module, instead of leaving this whole menu section open to
+// everyone.
 router.use(authenticate);
+router.use((req, res, next) => {
+  const needed = req.method === "GET" ? P.WEBSITE_VIEW : P.WEBSITE_UPDATE;
+  return authorize(needed)(req, res, next);
+});
 
 // ── GALLERY MANAGEMENT ─────────────────────────────────────
 

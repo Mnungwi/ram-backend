@@ -172,6 +172,14 @@ const PERMISSIONS = {
   // ─── AUDIT LOGS (System-wide activity trail) ───────────
   AUDIT_VIEW: "audit:view",
   AUDIT_EXPORT: "audit:export",
+
+  // ─── WEBSITE MANAGER (public site content: Gallery, SEO,
+  //     Services/News/Careers/FAQs/Settings via the "General Content CMS"
+  //     page) — Contact Inbox stays on its own INQUIRY_* permissions above,
+  //     and "Public Projects" reuses PROJECT_VIEW/PROJECT_UPDATE since it's
+  //     really the Project record's own public-facing fields.
+  WEBSITE_VIEW: "website:view",
+  WEBSITE_UPDATE: "website:update",
 };
 
 const ROLE_PERMISSIONS = {
@@ -282,6 +290,9 @@ const ROLE_PERMISSIONS = {
 
     PERMISSIONS.INQUIRY_VIEW,
     PERMISSIONS.INQUIRY_DELETE,
+
+    PERMISSIONS.WEBSITE_VIEW,
+    PERMISSIONS.WEBSITE_UPDATE,
   ],
 
   // Project Manager
