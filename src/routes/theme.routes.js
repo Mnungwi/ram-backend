@@ -54,6 +54,13 @@ const DEFAULT_THEME = {
   theme_login_bg_image: "https://images.unsplash.com/photo-1541888946425-d81bb19240f5?auto=format&fit=crop&w=1920&q=80",
   theme_login_overlay: "rgba(15,23,42,0.82)",
   theme_login_card_bg: "rgba(30,41,59,0.7)",
+  theme_login_title: "RAM PROJECTS",
+  theme_login_subtitle: "Elite Infrastructure Solutions",
+
+  // Splash / preloader — shown before the app itself finishes loading, on
+  // admin, website and mobile alike.
+  theme_splash_title: "UNITED RAM CONSTRUCTION",
+  theme_splash_bg: "#0f172a",
 };
 
 // GET /api/theme — public (login page + mobile need it before authenticating)
