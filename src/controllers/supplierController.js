@@ -245,6 +245,7 @@ exports.getSupplierLedger = async (req, res, next) => {
         paid: round2(paid),
         balance: round2(parseFloat(inv.amount || 0) - paid),
         project: invProjectMap[inv.projectId] || null,
+        lpoId: inv.lpoId || null, // lets the frontend show which delivered items (by LPO) this invoice/balance covers
         paymentHistory: inv.paymentHistory || [],
       };
     });
