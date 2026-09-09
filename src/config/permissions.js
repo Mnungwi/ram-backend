@@ -506,6 +506,20 @@ const ROLE_PERMISSIONS = {
     PERMISSIONS.STORE_VIEW,
     PERMISSIONS.REQUISITION_VIEW,
   ],
+
+  // Website Manager — the whole "Website Manager" sidebar group and nothing
+  // else. PROJECT_VIEW/PROJECT_UPDATE are needed for the "Public Projects"
+  // page (it toggles a project's public-facing fields through the regular
+  // Project API, not a separate resource) — not full project management
+  // (no PROJECT_CREATE/PROJECT_DELETE, no Finance/Store/Users/Roles/...).
+  website_manager: [
+    PERMISSIONS.PROJECT_VIEW,
+    PERMISSIONS.PROJECT_UPDATE,
+    PERMISSIONS.WEBSITE_VIEW,
+    PERMISSIONS.WEBSITE_UPDATE,
+    PERMISSIONS.INQUIRY_VIEW,
+    PERMISSIONS.INQUIRY_DELETE,
+  ],
 };
 
 module.exports = { PERMISSIONS, ROLE_PERMISSIONS };

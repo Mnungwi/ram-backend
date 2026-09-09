@@ -14,6 +14,7 @@ const ROLES = [
   { name: 'Finance Officer', slug: 'finance_officer', description: 'Finance, invoices, payments and budget.',              isSystem: true, color: '#0891b2' },
   { name: 'Storekeeper',     slug: 'storekeeper',     description: 'Manages project store inventory, receiving and issuing of materials.', isSystem: true, color: '#ea580c' },
   { name: 'Viewer',          slug: 'viewer',          description: 'Read-only access to assigned projects.',              isSystem: true, color: '#6b7280' },
+  { name: 'Website Manager', slug: 'website_manager', description: 'Manages public website content, gallery, SEO and the contact inbox — nothing else.', isSystem: true, color: '#0ea5e9' },
 ];
 
 const PERMISSION_GROUPS = {
