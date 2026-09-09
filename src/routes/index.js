@@ -39,6 +39,7 @@ router.use("/", require("./gallery.routes"));
 router.use("/", require("./letter.routes"));
 router.use("/", require("./finance.routes"));
 router.use("/", require("./document.routes"));
+router.use("/", require("./subcontractors.routes"));
 
 module.exports = router;
 
