@@ -37,6 +37,15 @@ const User = sequelize.define('User', {
     type: DataTypes.STRING(500),
     allowNull: true,
   },
+  // A user's own stored digital signature image (uploaded once, e.g. via
+  // Profile) — lets someone else compose & finalize a letter "signing as"
+  // this user (Letters > Compose > "Signing As"), stamping this image onto
+  // the letter instead of requiring them to log in and click Approve every
+  // time. Same URL-path convention as `avatar` (not a base64 blob in the row).
+  signatureImage: {
+    type: DataTypes.STRING(500),
+    allowNull: true,
+  },
   jobTitle: {
     type: DataTypes.STRING(150),
     allowNull: true,

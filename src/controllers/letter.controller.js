@@ -157,7 +157,7 @@ const USER_INCLUDES = [
   { model: User, as: "createdBy", attributes: ["id", "firstName", "lastName"] },
   { model: User, as: "approvedBy", attributes: ["id", "firstName", "lastName"] },
   { model: User, as: "sentBy", attributes: ["id", "firstName", "lastName"] },
-  { model: User, as: "sender", attributes: ["id", "firstName", "lastName", "email", "jobTitle", "department"] },
+  { model: User, as: "sender", attributes: ["id", "firstName", "lastName", "email", "jobTitle", "department", "signatureImage"] },
   { model: Stakeholder, as: "recipient", attributes: ["id", "name", "organization", "jobTitle", "email", "phone"] },
   { model: Project, as: "project", attributes: ["id", "name", "projectCode"] },
   { model: User, as: "forwardedTo", attributes: ["id", "firstName", "lastName", "email"] },
@@ -959,10 +959,16 @@ async function buildLetterHtml(letter) {
       <div style="line-height: 1.6; font-size: 14px; margin-bottom: 40px; color: #111827;">${letter.body}</div>
       <!-- SIGN-OFF -->
       <div style="margin-top: 40px; font-size: 14px;">
-        <div style="margin-bottom: 35px;">Yours faithfully,</div>
+        <div style="margin-bottom: ${letter.sender?.signatureImage ? "8px" : "35px"};">Yours faithfully,</div>
+        ${letter.sender?.signatureImage ? `<div style="margin-bottom:6px;"><img src="${letter.sender.signatureImage}" style="height:50px; object-fit:contain;" /></div>` : ""}
         <div style="font-weight: bold; text-decoration: underline; min-width: 180px; display: inline-block;">${senderName}</div>
         ${senderPosition ? `<div style="color:#4b5563;font-size:12px;">${senderPosition}</div>` : ""}
         ${senderOrganization ? `<div style="color:#4b5563;font-size:12px;">${senderOrganization}</div>` : ""}
+        ${letter.createdBy && letter.senderId && letter.createdById !== letter.senderId ? `
+          <div style="margin-top:6px; font-size:10px; color:#9ca3af; font-style:italic;">
+            Prepared on behalf of ${senderName} by ${letter.createdBy.firstName} ${letter.createdBy.lastName}
+          </div>
+        ` : ""}
         ${letter.approvedById && letter.approvedBy ? `
           <div style="margin-top:10px; font-size:11px; color:#059669; font-style:italic;">
             ✓ Digitally signed by ${letter.approvedBy.firstName} ${letter.approvedBy.lastName} on ${new Date(letter.approvedAt).toLocaleDateString("en-GB", { day: "2-digit", month: "long", year: "numeric" })}
@@ -1132,11 +1138,29 @@ exports.downloadLetterPdf = async (req, res, next) => {
     doc.font("Helvetica").fontSize(11).fillColor("#111827").text(stripHtml(letter.body), { align: "left", lineGap: 4 });
     doc.moveDown(3);
 
-    // Sender
+    // Sender — stamp the sender's stored signature image, if they have one
+    // uploaded (Profile > Digital Signature), before their printed name.
+    if (letter.sender?.signatureImage) {
+      const sigRelative = letter.sender.signatureImage.replace(/^\/?uploads\//, "");
+      const sigPath = path.join(UPLOADS_ROOT, sigRelative);
+      if (fs.existsSync(sigPath)) {
+        try {
+          doc.image(sigPath, doc.x, doc.y, { height: 40 });
+          doc.moveDown(2.2);
+        } catch (e) {
+          // corrupt/unsupported image — skip silently, the printed name still identifies the signer
+        }
+      }
+    }
     doc.fillColor("#111827").font("Helvetica-Bold").fontSize(11).text(senderName);
     doc.font("Helvetica");
     if (senderPosition) doc.fontSize(9).fillColor("#6b7280").text(senderPosition);
     if (senderOrganization) doc.fontSize(9).fillColor("#6b7280").text(senderOrganization);
+    if (letter.createdBy && letter.senderId && letter.createdById !== letter.senderId) {
+      doc.moveDown(0.3);
+      doc.fontSize(8).font("Helvetica-Oblique").fillColor("#9ca3af")
+        .text(`Prepared on behalf of ${senderName} by ${letter.createdBy.firstName} ${letter.createdBy.lastName}`);
+    }
 
     if (letter.approvedById && letter.approvedBy) {
       const signedName = `${letter.approvedBy.firstName || ""} ${letter.approvedBy.lastName || ""}`.trim();

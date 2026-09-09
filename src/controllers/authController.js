@@ -290,6 +290,37 @@ const uploadAvatar = async (req, res, next) => {
   }
 };
 
+// A stored signature image lets someone else pick this user as the
+// "Signing As" identity on Letters > Compose without them having to log in
+// and personally approve every letter — the signature is stamped onto the
+// PDF/preview automatically. Only the user themselves can upload their own
+// (reuses the avatarUpload middleware — same size/type limits, same dir).
+const uploadSignature = async (req, res, next) => {
+  try {
+    if (!req.file) return errorResponse(res, 'No image file uploaded', 400);
+
+    const signatureUrl = `/uploads/avatars/${req.file.filename}`;
+    await User.update({ signatureImage: signatureUrl }, { where: { id: req.userId } });
+    const updated = await User.findByPk(req.userId);
+
+    await audit({ userId: req.userId, action: 'update_signature', resource: 'user', resourceId: req.userId, req });
+    return successResponse(res, { user: updated, signatureImage: signatureUrl }, 'Signature updated');
+  } catch (err) {
+    next(err);
+  }
+};
+
+const deleteSignature = async (req, res, next) => {
+  try {
+    await User.update({ signatureImage: null }, { where: { id: req.userId } });
+    const updated = await User.findByPk(req.userId);
+    await audit({ userId: req.userId, action: 'delete_signature', resource: 'user', resourceId: req.userId, req });
+    return successResponse(res, { user: updated }, 'Signature removed');
+  } catch (err) {
+    next(err);
+  }
+};
+
 const changePassword = async (req, res, next) => {
   try {
     const { currentPassword, newPassword } = req.body;
@@ -396,7 +427,7 @@ const resetPassword = async (req, res, next) => {
 };
 
 module.exports = {
-  register, login, verifyOtp, resendOtp, refresh, logout, getProfile, updateProfile, uploadAvatar, changePassword,
+  register, login, verifyOtp, resendOtp, refresh, logout, getProfile, updateProfile, uploadAvatar, uploadSignature, deleteSignature, changePassword,
   forgotPassword, resetPassword,
   registerRules, loginRules,
 };
