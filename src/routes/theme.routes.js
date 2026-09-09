@@ -41,6 +41,19 @@ const DEFAULT_THEME = {
   theme_danger: "#ef4444",
   theme_logo_url: "",
   theme_app_name: "United Ram Construction",
+
+  // Layout — previously the template's floating "gear" demo widget, now
+  // organisation-wide settings controlled from the Appearance page.
+  theme_menu_layout: "vertical", // vertical | horizontal
+  theme_menu_type: "default", // default | compact | mini
+  theme_fixed_header: "true",
+  theme_fixed_sidebar: "true",
+  theme_fixed_footer: "false",
+
+  // Login page
+  theme_login_bg_image: "https://images.unsplash.com/photo-1541888946425-d81bb19240f5?auto=format&fit=crop&w=1920&q=80",
+  theme_login_overlay: "rgba(15,23,42,0.82)",
+  theme_login_card_bg: "rgba(30,41,59,0.7)",
 };
 
 // GET /api/theme — public (login page + mobile need it before authenticating)
