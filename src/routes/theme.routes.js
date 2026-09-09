@@ -35,6 +35,7 @@ const DEFAULT_THEME = {
   theme_card_bg: "#ffffff",
   theme_border: "#e2e8f0",
   theme_table_header_bg: "#f8fafc",
+  theme_table_header_text: "#64748b",
   theme_table_row_hover_bg: "#f8fafc",
   theme_success: "#10b981",
   theme_warning: "#f59e0b",

@@ -24,7 +24,11 @@ const listUsers = async (req, res, next) => {
     const { count, rows } = await User.findAndCountAll({
       where,
       include: [{ model: Role, as: 'roles', through: { attributes: [] } }],
-      order: [['createdAt', 'DESC']],
+      // 'id' as a tiebreaker: many seeded users share the exact same createdAt
+      // (down to the second) — without a stable secondary sort, MySQL's tie
+      // order isn't guaranteed between paginated queries, so the same user
+      // can appear to "repeat" across pages/refreshes.
+      order: [['createdAt', 'DESC'], ['id', 'ASC']],
       limit,
       offset,
       distinct: true, // without this, a user with 2+ roles is counted/rowed once per role (duplicate rows + inflated pagination)
