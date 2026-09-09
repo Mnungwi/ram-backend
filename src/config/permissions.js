@@ -358,7 +358,11 @@ const ROLE_PERMISSIONS = {
     PERMISSIONS.PROCUREMENT_VIEW,
     PERMISSIONS.CONTRACT_VIEW,
     PERMISSIONS.PURCHASE_ORDER_VIEW,
-    PERMISSIONS.FINANCE_VIEW,
+    // NOT FINANCE_VIEW / BUDGET_VIEW / PAYMENT_VIEW / INVOICE_VIEW — a Site
+    // Engineer is field-level (activities, reports, store, letters) and
+    // should not see project financials at all; removed 2026-09-09 per
+    // explicit request after Hassan (site_engineer) could still see the
+    // Finance tab.
     PERMISSIONS.REPORT_VIEW,
     PERMISSIONS.REPORT_CREATE,
     PERMISSIONS.DOCUMENT_VIEW,
