@@ -33,10 +33,19 @@ router.use("/projects", require("./projects.routes"));
 router.use("/media", require("./media.routes"));
 router.use("/inquiries", require("./inquiries.routes"));
 router.use("/audit-logs", require("./audit.routes"));
+// letter.routes.js MUST be mounted before any "/"-mounted router that does
+// a blanket `router.use(authenticate)` (siteFund.routes.js, finance.routes.js
+// below) — those routers see EVERY request (no path prefix, unlike
+// "/users", "/clients" etc above), so a blanket authenticate mounted
+// earlier intercepts and 401s letters' intentionally-PUBLIC routes
+// (GET /letters/:id/preview, used in an <iframe> that can't send an
+// Authorization header; GET /letters/:id/attachment/file) before Express
+// ever reaches letter.routes.js's own routing table. Express dispatches
+// "/"-mounted routers strictly in registration order.
+router.use("/", require("./letter.routes"));
 router.use("/", require("./siteFund.routes"));
 router.use("/", require("./theme.routes"));
 router.use("/", require("./gallery.routes"));
-router.use("/", require("./letter.routes"));
 router.use("/", require("./finance.routes"));
 router.use("/", require("./document.routes"));
 router.use("/", require("./subcontractors.routes"));

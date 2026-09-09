@@ -376,8 +376,14 @@ exports.createLetter = async (req, res, next) => {
       recipientId, recipientName: bRecipientName, recipientPosition: bRecipientPosition, recipientOrganization: bRecipientOrganization, recipientEmail: bRecipientEmail,
       fromName, fromTitle, fromOrg, fromEmail,
       toName, toTitle, toOrg, toEmail,
-      ccList,
+      ccList: bodyCcList, ccRecipients,
     } = req.body;
+    // The Compose form's FormData always sends this under "ccRecipients"
+    // (see letter-form.component.ts onSave()) — reading only "ccList" here
+    // silently dropped every CC recipient added while composing a NEW
+    // letter (they'd still show correctly after an edit/update, since
+    // updateLetter already reads "ccRecipients").
+    const ccList = ccRecipients ?? bodyCcList;
 
     const projectId = queryProjectId || bodyProjectId || null;
     const senderName = bSenderName || fromName;
@@ -840,6 +846,22 @@ const stripHtml = (html) => {
     .replace(/&quot;/g, '"');
 };
 
+// A sender's stored signature image only renders once it's actually
+// THEIRS to show — either they wrote the letter themselves (self-signed,
+// no delegation happened), or someone composed it "Signing As" them and
+// they've since actually approved it (Approved status + approvedBy IS the
+// designated sender) — never just because a secretary picked their name.
+function letterHasVisibleSignature(letter) {
+  if (!letter.sender?.signatureImage) return false;
+  const selfSigned = !letter.senderId || letter.senderId === letter.createdById;
+  const delegateApproved =
+    letter.status === "Approved" &&
+    letter.approvedById &&
+    letter.senderId &&
+    letter.approvedById === letter.senderId;
+  return selfSigned || delegateApproved;
+}
+
 async function buildLetterHtml(letter) {
   // Resolve Sender Details
   const senderName = letter.sender ? `${letter.sender.firstName} ${letter.sender.lastName}` : (letter.senderName || "United");
@@ -959,14 +981,14 @@ async function buildLetterHtml(letter) {
       <div style="line-height: 1.6; font-size: 14px; margin-bottom: 40px; color: #111827;">${letter.body}</div>
       <!-- SIGN-OFF -->
       <div style="margin-top: 40px; font-size: 14px;">
-        <div style="margin-bottom: ${letter.sender?.signatureImage ? "8px" : "35px"};">Yours faithfully,</div>
-        ${letter.sender?.signatureImage ? `<div style="margin-bottom:6px;"><img src="${letter.sender.signatureImage}" style="height:50px; object-fit:contain;" /></div>` : ""}
+        <div style="margin-bottom: ${letterHasVisibleSignature(letter) ? "8px" : "35px"};">Yours faithfully,</div>
+        ${letterHasVisibleSignature(letter) ? `<div style="margin-bottom:6px;"><img src="${letter.sender.signatureImage}" style="height:50px; object-fit:contain;" /></div>` : ""}
         <div style="font-weight: bold; text-decoration: underline; min-width: 180px; display: inline-block;">${senderName}</div>
         ${senderPosition ? `<div style="color:#4b5563;font-size:12px;">${senderPosition}</div>` : ""}
         ${senderOrganization ? `<div style="color:#4b5563;font-size:12px;">${senderOrganization}</div>` : ""}
         ${letter.createdBy && letter.senderId && letter.createdById !== letter.senderId ? `
           <div style="margin-top:6px; font-size:10px; color:#9ca3af; font-style:italic;">
-            Prepared on behalf of ${senderName} by ${letter.createdBy.firstName} ${letter.createdBy.lastName}
+            Prepared on behalf of ${senderName} by ${letter.createdBy.firstName} ${letter.createdBy.lastName}${letter.status !== "Approved" ? " — awaiting their signature" : ""}
           </div>
         ` : ""}
         ${letter.approvedById && letter.approvedBy ? `
@@ -1139,14 +1161,24 @@ exports.downloadLetterPdf = async (req, res, next) => {
     doc.moveDown(3);
 
     // Sender — stamp the sender's stored signature image, if they have one
-    // uploaded (Profile > Digital Signature), before their printed name.
-    if (letter.sender?.signatureImage) {
+    // uploaded (Profile > Digital Signature) AND it's actually theirs to
+    // show yet (letterHasVisibleSignature — self-signed, or a delegate who
+    // has since approved it), before their printed name.
+    if (letterHasVisibleSignature(letter)) {
       const sigRelative = letter.sender.signatureImage.replace(/^\/?uploads\//, "");
       const sigPath = path.join(UPLOADS_ROOT, sigRelative);
       if (fs.existsSync(sigPath)) {
         try {
-          doc.image(sigPath, doc.x, doc.y, { height: 40 });
-          doc.moveDown(2.2);
+          // doc.image() with explicit x/y does NOT auto-advance PDFKit's
+          // flowing cursor the way .text() does — a plain moveDown() here
+          // (as before) moved by a line-height unit unrelated to the
+          // image's actual height, so the printed name below could
+          // overlap the bottom of the image. Advance doc.y by the image's
+          // own height instead.
+          const imgHeight = 40;
+          const imgY = doc.y;
+          doc.image(sigPath, doc.x, imgY, { height: imgHeight });
+          doc.y = imgY + imgHeight + 6;
         } catch (e) {
           // corrupt/unsupported image — skip silently, the printed name still identifies the signer
         }
@@ -1159,7 +1191,7 @@ exports.downloadLetterPdf = async (req, res, next) => {
     if (letter.createdBy && letter.senderId && letter.createdById !== letter.senderId) {
       doc.moveDown(0.3);
       doc.fontSize(8).font("Helvetica-Oblique").fillColor("#9ca3af")
-        .text(`Prepared on behalf of ${senderName} by ${letter.createdBy.firstName} ${letter.createdBy.lastName}`);
+        .text(`Prepared on behalf of ${senderName} by ${letter.createdBy.firstName} ${letter.createdBy.lastName}${letter.status !== "Approved" ? " — awaiting their signature" : ""}`);
     }
 
     if (letter.approvedById && letter.approvedBy) {
