@@ -190,6 +190,23 @@ const generateLetterNo = async (projectId) => {
   }
 };
 
+// GET /api/letters/next-reference?projectId=xxx
+// Read-only preview of the reference number generateLetterNo() would hand
+// out next — for someone about to draft a letter OUTSIDE the system (e.g.
+// in Word) who needs to know which number is safe to write on it by hand.
+// It's advisory only: if another letter gets created in the meantime, this
+// exact number gets consumed first — the actual duplicate-proofing happens
+// in createLetter's uniqueness check below when that letter is registered.
+exports.peekNextLetterNo = async (req, res, next) => {
+  try {
+    const projectId = req.query.projectId || null;
+    const letterNo = await generateLetterNo(projectId);
+    return successResponse(res, { letterNo }, "Next reference number");
+  } catch (err) {
+    next(err);
+  }
+};
+
 // ══════════════════════════════════════════════════════════════
 // LIST / CRUD
 // ══════════════════════════════════════════════════════════════
@@ -374,7 +391,13 @@ exports.createLetter = async (req, res, next) => {
     const recipientEmail = bRecipientEmail || toEmail;
 
     if (!subject) return errorResponse(res, "Subject is required", 400);
-    if (!body) return errorResponse(res, "Body is required", 400);
+    // Body is normally required — UNLESS this letter was already written
+    // outside the system (e.g. in Word) and is being registered here with
+    // its file as the attachment; the frontend marks that case by sending
+    // `writtenExternally=true`, and requires an attachment itself in that
+    // case (checked below) so there's always real content backing the record.
+    const writtenExternally = req.body.writtenExternally === "true" || req.body.writtenExternally === true;
+    if (!body && !writtenExternally) return errorResponse(res, "Body is required", 400);
     if (!recipientId && !recipientName) return errorResponse(res, "Recipient name or ID is required", 400);
 
     // ccList inaweza kuja kama JSON string (multipart/form-data haitumii JSON moja kwa moja)
@@ -389,8 +412,23 @@ exports.createLetter = async (req, res, next) => {
 
     const attachmentsList = await processLetterAttachments(req.files, req.file, req.body.attachments, projectId, req.userId);
 
+    if (writtenExternally && attachmentsList.length === 0) {
+      return errorResponse(res, "Please attach the letter file — it was marked as written outside the system", 400);
+    }
+
+    // A manually-supplied reference number (an incoming letter's own
+    // number, or one already handwritten/typed on a letter drafted outside
+    // the system) is honored as-is, as long as it isn't already in use —
+    // this is the actual duplicate guard (see peekNextLetterNo above for
+    // the advisory "what number should I use" preview). Only when nothing
+    // was supplied do we fall back to the auto-generated sequence.
     let letterNo = req.body.letterNo || req.body.referenceNo;
-    if (type !== "incoming" || !letterNo) {
+    if (letterNo) {
+      const duplicate = await OfficialLetter.findOne({ where: { letterNo } });
+      if (duplicate) {
+        return errorResponse(res, `Reference number "${letterNo}" is already used by another letter`, 409);
+      }
+    } else {
       letterNo = await generateLetterNo(projectId);
     }
 

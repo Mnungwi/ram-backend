@@ -8,6 +8,9 @@ const { authenticate } = require("../middleware/auth"); // rekebisha jina la mid
 router.get("/letters", authenticate, lc.listLetters);
 router.get("/letters/inbox", authenticate, lc.getInboxLetters);
 router.get("/letters/stats", authenticate, lc.getLetterStats);
+// Must stay above "/letters/:letterId" — otherwise Express would match
+// "next-reference" as a letterId and hand it to getLetter instead.
+router.get("/letters/next-reference", authenticate, lc.peekNextLetterNo);
 router.post("/letters", authenticate, upload.any(), lc.createLetter);
 
 // Za project maalum
