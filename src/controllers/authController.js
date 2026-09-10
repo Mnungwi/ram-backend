@@ -9,6 +9,7 @@ const { successResponse, errorResponse } = require('../utils/response');
 const { audit } = require('../utils/audit');
 const { sendMail } = require('../utils/mailer');
 const { sendSms } = require('../utils/sms');
+const { getBrandName } = require('../utils/branding');
 
 // Login OTP (email 2FA step) — off by default so local/dev environments
 // without working SMTP aren't locked out. Set OTP_LOGIN_ENABLED=true once
@@ -30,16 +31,17 @@ const generateAndSendOtp = async (user) => {
     { where: { id: user.id } },
   );
 
+  const brand = await getBrandName();
   const emailBody = `
     <p>Hi ${user.firstName},</p>
-    <p>Your login verification code is:</p>
+    <p>Your ${brand} login verification code is:</p>
     <p style="font-size:24px;font-weight:bold;letter-spacing:4px">${code}</p>
     <p>This code expires in 10 minutes. If you did not try to log in, you can ignore this message.</p>
   `;
-  const smsText = `${code} is your United Ram login verification code. It expires in 10 minutes. Do not share it with anyone.`;
+  const smsText = `${code} is your ${brand} login verification code. It expires in 10 minutes. Do not share it with anyone.`;
 
   const [emailRes, smsRes] = await Promise.allSettled([
-    sendMail({ to: user.email, subject: 'Your United Ram login code', html: emailBody }),
+    sendMail({ to: user.email, subject: `Your ${brand} login code`, html: emailBody }),
     user.phone
       ? sendSms(user.phone, smsText)
       : Promise.resolve({ ok: false, error: 'user has no phone number on file' }),
@@ -390,11 +392,12 @@ const forgotPassword = async (req, res, next) => {
     );
 
     const resetUrl = `${process.env.APP_URL || 'http://localhost:4200'}/reset-password?token=${rawToken}&email=${encodeURIComponent(email)}`;
+    const brand = await getBrandName();
 
     try {
       await sendMail({
         to: email,
-        subject: 'Reset your RAM Project Management password',
+        subject: `Reset your ${brand} password`,
         html: `
           <p>Hi ${user.firstName},</p>
           <p>We received a request to reset your password. This link expires in 1 hour.</p>

@@ -17,6 +17,7 @@ const { resolveUserPermissions } = require('../utils/permissionResolver');
 const { successResponse, errorResponse, paginatedResponse, getPagination } = require('../utils/response');
 const { audit } = require('../utils/audit');
 const { sendMail } = require('../utils/mailer');
+const { getBrandName } = require('../utils/branding');
 
 const listUsers = async (req, res, next) => {
   try {
@@ -161,9 +162,10 @@ const adminResetPassword = async (req, res, next) => {
 
     let emailSent = false;
     try {
+      const brand = await getBrandName();
       await sendMail({
         to: user.email,
-        subject: 'Your RAM Project Management password has been reset',
+        subject: `Your ${brand} password has been reset`,
         html: `
           <p>Hi ${user.firstName},</p>
           <p>An administrator has reset your password. Your temporary password is:</p>

@@ -193,10 +193,17 @@ router.get("/seo", async (req, res, next) => {
     if (seo && seo.length > 0) {
       return successResponse(res, seo[0], "SEO settings retrieved successfully");
     }
+
+    // No SEO row for this page yet — fall back to the DB-driven site
+    // settings rather than a hardcoded company name.
+    const [ws] = await sequelize.query("SELECT `key`, `value` FROM website_settings");
+    const s = {};
+    for (const row of ws || []) s[row.key] = row.value;
+    const siteName = s.site_title || 'Our Company';
     return successResponse(res, {
-      title: 'United Ram Construction - Premium Construction Company',
-      description: 'United Ram Construction Company is a premier contractor in Zanzibar.',
-      keywords: 'construction, united ram'
+      title: siteName,
+      description: s.site_description || s.about_who_we_are || `${siteName} — official website.`,
+      keywords: s.site_keywords || '',
     }, "Default SEO settings returned");
   } catch (err) {
     next(err);

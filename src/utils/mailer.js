@@ -56,8 +56,21 @@ transporter.verify((err) => {
  * @param {string} opts.html - HTML content ya barua
  * @param {Array} [opts.attachments] - [{ filename, path }]
  */
+// From-name precedence: SMTP_FROM_NAME env override → DB brand name
+// (admin Appearance / site settings) → neutral literal. Kept out of the
+// hardcoded-per-tenant business.
+async function resolveFromName() {
+  if (process.env.SMTP_FROM_NAME) return process.env.SMTP_FROM_NAME;
+  try {
+    const { getBrandName } = require("./branding");
+    return await getBrandName();
+  } catch (e) {
+    return "United Ram Construction";
+  }
+}
+
 async function sendLetterEmail({ to, cc, subject, html, attachments }) {
-  const fromName = process.env.SMTP_FROM_NAME || "RAM Project Management";
+  const fromName = await resolveFromName();
   const fromEmail = process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER;
 
   const info = await transporter.sendMail({
@@ -80,7 +93,7 @@ async function sendLetterEmail({ to, cc, subject, html, attachments }) {
  * @param {string} opts.html
  */
 async function sendMail({ to, subject, html }) {
-  const fromName = process.env.SMTP_FROM_NAME || "RAM Project Management";
+  const fromName = await resolveFromName();
   const fromEmail = process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER;
 
   const info = await transporter.sendMail({
