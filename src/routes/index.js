@@ -32,6 +32,7 @@ router.use("/storekeepers", require("./storekeepers.routes"));
 router.use("/projects", require("./projects.routes"));
 router.use("/media", require("./media.routes"));
 router.use("/inquiries", require("./inquiries.routes"));
+router.use("/notifications", require("./notification.routes"));
 router.use("/audit-logs", require("./audit.routes"));
 // letter.routes.js MUST be mounted before any "/"-mounted router that does
 // a blanket `router.use(authenticate)` (siteFund.routes.js, finance.routes.js

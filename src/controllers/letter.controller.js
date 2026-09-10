@@ -14,6 +14,7 @@ const {
   getPagination,
 } = require("../utils/response");
 const { audit } = require("../utils/audit");
+const { notifyUsersWithPermission } = require("../utils/notify");
 const { Op } = require("sequelize");
 
 // The Letters PDF/preview letterhead used to be 100% hardcoded to a fake
@@ -496,6 +497,28 @@ exports.createLetter = async (req, res, next) => {
 
     const full = await OfficialLetter.findByPk(letter.id, { include: USER_INCLUDES });
     const letterData = await formatLetterResponse(full);
+
+    // A letter written outside the system (e.g. in Word) and uploaded here
+    // as a hard copy still has to be registered, printed and filed by the
+    // secretary — notify everyone who can dispatch letters (letter:send) so
+    // they can open it, download it and print it. Best-effort: never blocks
+    // the create.
+    if (writtenExternally) {
+      notifyUsersWithPermission(
+        "letter:send",
+        {
+          type: "letter_uploaded",
+          title: "Hard-copy letter uploaded",
+          message: `"${subject}" (${letterNo}) was written outside the system and needs to be registered and printed.`,
+          link: `/letters/${letter.id}`,
+          entityType: "letter",
+          entityId: letter.id,
+          createdById: req.userId,
+        },
+        { excludeUserId: req.userId },
+      ).catch(() => {});
+    }
+
     return successResponse(res, { letter: letterData }, "Letter created", 201);
   } catch (err) {
     if (req.file) fs.unlink(req.file.path, () => {});
