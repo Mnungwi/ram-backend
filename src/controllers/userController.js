@@ -1,6 +1,18 @@
 const { Op } = require('sequelize');
 const crypto = require('crypto');
+const validator = require('validator');
 const { User, Role, Permission, UserRole, UserPermission } = require('../models/index');
+
+// Normalise an email the SAME way the login route does (express-validator's
+// .normalizeEmail() runs `validator.normalizeEmail` with its defaults, which
+// lower-cases the address and applies provider-specific rules). Admin-created
+// users were stored with the raw typed casing, so a user created as
+// "Ahmed.Said@Gmail.com" could never log in (login normalises the typed
+// email to "ahmedsaid@gmail.com" and finds no match).
+const normaliseEmail = (raw) => {
+  const trimmed = String(raw || '').trim();
+  return validator.normalizeEmail(trimmed) || trimmed.toLowerCase();
+};
 const { resolveUserPermissions } = require('../utils/permissionResolver');
 const { successResponse, errorResponse, paginatedResponse, getPagination } = require('../utils/response');
 const { audit } = require('../utils/audit');
@@ -56,7 +68,12 @@ const getUser = async (req, res, next) => {
 
 const createUser = async (req, res, next) => {
   try {
-    const { firstName, lastName, email, password, phone, jobTitle, department, roleIds } = req.body;
+    const { firstName, lastName, password, phone, jobTitle, department, roleIds } = req.body;
+    const email = normaliseEmail(req.body.email);
+    if (!email || !validator.isEmail(email)) return errorResponse(res, 'A valid email is required', 400);
+    if (!password || String(password).length < 8) {
+      return errorResponse(res, 'Password must be at least 8 characters', 400);
+    }
 
     const existing = await User.unscoped().findOne({ where: { email } });
     if (existing) return errorResponse(res, 'Email already exists', 409);
