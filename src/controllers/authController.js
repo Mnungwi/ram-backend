@@ -8,6 +8,7 @@ const { resolveUserPermissions } = require('../utils/permissionResolver');
 const { successResponse, errorResponse } = require('../utils/response');
 const { audit } = require('../utils/audit');
 const { sendMail } = require('../utils/mailer');
+const { sendSms } = require('../utils/sms');
 
 // Login OTP (email 2FA step) — off by default so local/dev environments
 // without working SMTP aren't locked out. Set OTP_LOGIN_ENABLED=true once
@@ -16,6 +17,10 @@ const OTP_LOGIN_ENABLED = process.env.OTP_LOGIN_ENABLED === 'true';
 const OTP_TTL_MS = 10 * 60 * 1000; // 10 minutes
 const OTP_MAX_ATTEMPTS = 5;
 
+// Sends the login OTP to BOTH the user's email and their phone (SMS), in
+// parallel. Returns { emailSent, smsSent, delivered } — `delivered` is true
+// if the code went out on at least one channel, so the caller can still
+// let the user proceed as long as one worked.
 const generateAndSendOtp = async (user) => {
   const code = String(crypto.randomInt(100000, 999999)); // 6-digit
   const hashedCode = await bcrypt.hash(code, 10);
@@ -25,22 +30,30 @@ const generateAndSendOtp = async (user) => {
     { where: { id: user.id } },
   );
 
-  try {
-    await sendMail({
-      to: user.email,
-      subject: 'Your RAM Project Management login code',
-      html: `
-        <p>Hi ${user.firstName},</p>
-        <p>Your login verification code is:</p>
-        <p style="font-size:24px;font-weight:bold;letter-spacing:4px">${code}</p>
-        <p>This code expires in 10 minutes. If you did not try to log in, you can ignore this email.</p>
-      `,
-    });
-    return true;
-  } catch (mailErr) {
-    console.error('generateAndSendOtp: failed to send OTP email —', mailErr.message);
-    return false;
+  const emailBody = `
+    <p>Hi ${user.firstName},</p>
+    <p>Your login verification code is:</p>
+    <p style="font-size:24px;font-weight:bold;letter-spacing:4px">${code}</p>
+    <p>This code expires in 10 minutes. If you did not try to log in, you can ignore this message.</p>
+  `;
+  const smsText = `${code} is your United Ram login verification code. It expires in 10 minutes. Do not share it with anyone.`;
+
+  const [emailRes, smsRes] = await Promise.allSettled([
+    sendMail({ to: user.email, subject: 'Your United Ram login code', html: emailBody }),
+    user.phone
+      ? sendSms(user.phone, smsText)
+      : Promise.resolve({ ok: false, error: 'user has no phone number on file' }),
+  ]);
+
+  const emailSent = emailRes.status === 'fulfilled';
+  if (!emailSent) console.error('generateAndSendOtp: OTP email failed —', emailRes.reason?.message);
+
+  const smsSent = smsRes.status === 'fulfilled' && smsRes.value?.ok === true;
+  if (!smsSent && user.phone) {
+    console.error('generateAndSendOtp: OTP SMS failed —', smsRes.status === 'fulfilled' ? smsRes.value?.error : smsRes.reason?.message);
   }
+
+  return { emailSent, smsSent, delivered: emailSent || smsSent };
 };
 
 // ─── VALIDATION RULES ────────────────────────────────────────────────────────
@@ -105,15 +118,22 @@ const login = async (req, res, next) => {
     }
 
     if (OTP_LOGIN_ENABLED) {
-      const emailSent = await generateAndSendOtp(user);
+      const { emailSent, smsSent, delivered } = await generateAndSendOtp(user);
       await audit({ userId: user.id, action: 'login_otp_requested', resource: 'user', resourceId: user.id, req });
+
+      const channels = [];
+      if (emailSent) channels.push('email');
+      if (smsSent) channels.push('phone');
+      const message = delivered
+        ? `Verification code sent to your ${channels.join(' and ')}`
+        : 'Verification code generated, but it could not be delivered by email or SMS — contact an administrator';
+
       return successResponse(res, {
         requiresOtp: true,
         email: user.email,
         emailSent,
-      }, emailSent
-        ? 'Verification code sent to your email'
-        : 'Verification code generated, but the email could not be sent — contact an administrator');
+        smsSent,
+      }, message);
     }
 
     const { accessToken, refreshToken } = generateTokenPair(user);
@@ -201,10 +221,13 @@ const resendOtp = async (req, res, next) => {
     const user = await User.findOne({ where: { email, isActive: true } });
     if (!user) return successResponse(res, null, 'If that account exists, a new code has been sent.');
 
-    const emailSent = await generateAndSendOtp(user);
-    return successResponse(res, { emailSent }, emailSent
-      ? 'A new verification code has been sent to your email'
-      : 'Could not send the verification email — contact an administrator');
+    const { emailSent, smsSent, delivered } = await generateAndSendOtp(user);
+    const channels = [];
+    if (emailSent) channels.push('email');
+    if (smsSent) channels.push('phone');
+    return successResponse(res, { emailSent, smsSent }, delivered
+      ? `A new verification code has been sent to your ${channels.join(' and ')}`
+      : 'Could not send the verification code by email or SMS — contact an administrator');
   } catch (err) {
     next(err);
   }
