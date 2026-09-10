@@ -16,6 +16,23 @@ const { errorHandler, notFound } = require("./middleware/errorHandler");
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Behind nginx (production) the real client IP arrives in X-Forwarded-For.
+// Trust the first proxy hop so req.ip / express-rate-limit key on the real
+// client instead of 127.0.0.1 — and so newer express-rate-limit versions
+// stop throwing ERR_ERL_UNEXPECTED_X_FORWARDED_FOR. TRUST_PROXY can override
+// (e.g. "2" for two proxy hops, or "false" for local dev with no proxy).
+const trustProxyEnv = process.env.TRUST_PROXY;
+app.set(
+  "trust proxy",
+  trustProxyEnv === undefined
+    ? 1
+    : trustProxyEnv === "false"
+      ? false
+      : /^\d+$/.test(trustProxyEnv)
+        ? parseInt(trustProxyEnv, 10)
+        : trustProxyEnv,
+);
+
 // CORS_ORIGIN may be a single origin, a comma-separated list ("a,b,c" — how
 // we configure it in production for the website + admin frontends), or "*".
 // The `cors` package does NOT split comma-separated strings itself — passed
