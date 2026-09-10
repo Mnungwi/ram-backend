@@ -24,6 +24,18 @@ const transporter = nodemailer.createTransport({
     user: process.env.SMTP_USER,
     pass: process.env.SMTP_PASS,
   },
+  tls: {
+    // Shared cPanel hosting (Namecheap, etc.) usually presents a TLS cert
+    // for the physical server (e.g. *.web-hosting.com), NOT for
+    // mail.<yourdomain>, so Node aborts with a "hostname does not match
+    // certificate's altnames" error. Best fix: point SMTP_HOST at the name
+    // the cert actually covers (your cPanel "Server Information" hostname).
+    // Quick fix: SMTP_TLS_REJECT_UNAUTHORIZED=false to accept the mismatch.
+    rejectUnauthorized: process.env.SMTP_TLS_REJECT_UNAUTHORIZED !== "false",
+    ...(process.env.SMTP_TLS_SERVERNAME
+      ? { servername: process.env.SMTP_TLS_SERVERNAME }
+      : {}),
+  },
 });
 
 // Kagua connection ipo sahihi wakati wa boot (hiari lakini husaidia debugging)
