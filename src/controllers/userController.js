@@ -61,7 +61,10 @@ const createUser = async (req, res, next) => {
     const existing = await User.unscoped().findOne({ where: { email } });
     if (existing) return errorResponse(res, 'Email already exists', 409);
 
-    const user = await User.create({ firstName, lastName, email, password, phone, jobTitle, department });
+    // The admin sets this initial password, so the new user must change it
+    // on their first login (same as after an admin password reset). The
+    // /force-change-password guard + route already exist on the frontend.
+    const user = await User.create({ firstName, lastName, email, password, phone, jobTitle, department, mustChangePassword: true });
 
     // Assign roles
     if (roleIds && roleIds.length > 0) {
