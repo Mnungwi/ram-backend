@@ -25,19 +25,48 @@ const { Op } = require("sequelize");
 // runs on every preview/download and rarely changes.
 let brandingCache = null;
 let brandingCacheAt = 0;
-// Letter footer text + watermark are configured the same way (Website
-// Content admin > Branding & Contact Info > "Letter Footer & Watermark"),
-// stored as more website_settings keys: letter_footer_text,
-// letter_watermark_enabled/_text/_color/_opacity/_rotation/_font_size.
-// Watermark defaults to OFF until an admin explicitly turns it on.
+
+// PDFKit ships 14 standard base fonts with no embedding needed — Times and
+// Helvetica cover the two professional-letter looks admins actually ask
+// for. The HTML preview uses the matching CSS stack so preview and PDF
+// always render with the SAME typeface, not two different defaults.
+const FONT_PRESETS = {
+  serif: {
+    css: "'Times New Roman', Times, serif",
+    pdfRegular: "Times-Roman",
+    pdfBold: "Times-Bold",
+    pdfItalic: "Times-Italic",
+    pdfBoldItalic: "Times-BoldItalic",
+  },
+  sans: {
+    css: "Helvetica, Arial, sans-serif",
+    pdfRegular: "Helvetica",
+    pdfBold: "Helvetica-Bold",
+    pdfItalic: "Helvetica-Oblique",
+    pdfBoldItalic: "Helvetica-BoldOblique",
+  },
+};
+
+// Every visual knob for the letter (identity, accent color, font, sign-off
+// phrase, footer, watermark) is one website_settings dict, managed from the
+// admin's dedicated Letter Template page (Letters > Letter Template) so an
+// entirely different client's letters can look completely different
+// without touching code. Watermark defaults to OFF until an admin turns it
+// on, so existing letters render unchanged until configured.
 function buildLetterheadDict(dict) {
   const name = dict.site_title || "United Ram Construction Company Limited";
+  const fontKey = dict.letter_font_family === "sans" ? "sans" : "serif";
   return {
     name,
     logo: dict.site_logo || null,
     address: dict.contact_address || "Mbweni, Zanzibar, Tanzania",
     phone: dict.contact_phone || "+255 777 412 337",
     email: dict.contact_email || "info@unitedram.com",
+    accentColor: dict.letter_accent_color || "#1a56db",
+    fontFamily: fontKey,
+    fontCss: FONT_PRESETS[fontKey].css,
+    pdfFont: FONT_PRESETS[fontKey],
+    signOffText: dict.letter_signoff_text || "Yours faithfully,",
     footerText: dict.letter_footer_text || `${name} — Official Document`,
     watermarkEnabled: dict.letter_watermark_enabled === "true",
     watermarkText: dict.letter_watermark_text || name,
@@ -80,7 +109,7 @@ function applyLetterheadFooterAndWatermark(doc, branding) {
 
     if (branding.watermarkEnabled && branding.watermarkText) {
       doc.save();
-      doc.font("Helvetica-Bold").fontSize(branding.watermarkFontSize);
+      doc.font(branding.pdfFont.pdfBold).fontSize(branding.watermarkFontSize);
       const textWidth = doc.widthOfString(branding.watermarkText);
       doc.fillOpacity(branding.watermarkOpacity);
       doc.fillColor(branding.watermarkColor);
@@ -97,7 +126,7 @@ function applyLetterheadFooterAndWatermark(doc, branding) {
 
     if (branding.footerText) {
       const footerY = pageHeight - doc.page.margins.bottom + 12;
-      doc.fillOpacity(1).fillColor("#9ca3af").font("Helvetica").fontSize(7.5);
+      doc.fillOpacity(1).fillColor("#9ca3af").font(branding.pdfFont.pdfRegular).fontSize(7.5);
       doc.text(branding.footerText, marginX, footerY, { width: pageWidth - marginX * 2 - 70, align: "left" });
       doc.text(`Page ${i - range.start + 1} of ${range.count}`, pageWidth - marginX - 70, footerY, {
         width: 70,
@@ -1072,7 +1101,7 @@ async function buildLetterHtml(letter) {
       return `
         <div style="margin-top: 12px; padding: 10px; border: 1px solid #e5e7eb; border-radius: 6px; background: #f9fafb;">
           <strong>Attachment ${attachmentsList.length > 1 ? `#${idx + 1}` : ""}:</strong> 
-          <a href="${fileUrl}" target="_blank" style="color: #1a56db; font-weight: bold; text-decoration: underline; margin-left: 5px;">
+          <a href="${fileUrl}" target="_blank" style="color: ${branding.accentColor}; font-weight: bold; text-decoration: underline; margin-left: 5px;">
             ${fileName} ↗
           </a>
           ${previewTag}
@@ -1088,10 +1117,12 @@ async function buildLetterHtml(letter) {
     `;
   }
 
-  // Watermark + footer are configured in Website Content > Branding &
-  // Contact Info > "Letter Footer & Watermark" (website_settings keys
-  // letter_watermark_* / letter_footer_text). Watermark is off unless an
-  // admin has switched it on.
+  // Identity, accent color, font, sign-off phrase, footer and watermark are
+  // ALL configured from one place — the admin's Letters > Letter Template
+  // page (website_settings keys letter_accent_color, letter_font_family,
+  // letter_signoff_text, letter_footer_text, letter_watermark_*) — so a
+  // different client's letters can look completely different with zero
+  // code changes. Watermark is off unless an admin has switched it on.
   const watermarkHtml = branding.watermarkEnabled && branding.watermarkText
     ? `<div style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center; pointer-events:none; overflow:hidden; z-index:0;">
          <span style="transform:rotate(${branding.watermarkRotation}deg); font-size:${branding.watermarkFontSize}px; font-weight:800; color:${branding.watermarkColor}; opacity:${branding.watermarkOpacity}; white-space:nowrap; font-family:Helvetica, Arial, sans-serif;">${branding.watermarkText}</span>
@@ -1102,14 +1133,14 @@ async function buildLetterHtml(letter) {
     : "";
 
   return `
-    <div style="position:relative; overflow:hidden; font-family: 'Times New Roman', Times, serif; max-width: 800px; margin: 0 auto; padding: 40px; border: 1px solid #e5e7eb; background: #fff; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); color: #111827;">
+    <div style="position:relative; overflow:hidden; font-family: ${branding.fontCss}; max-width: 800px; margin: 0 auto; padding: 40px; border: 1px solid #e5e7eb; background: #fff; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); color: #111827;">
       ${watermarkHtml}
       <div style="position:relative; z-index:1;">
-      <!-- LETTERHEAD — real, DB-driven company branding (Website Content > Branding & Contact Info), not a hardcoded placeholder company -->
-      <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 3px solid #1a56db; padding-bottom: 15px; margin-bottom: 25px;">
+      <!-- LETTERHEAD — real, DB-driven company branding & format (Letters > Letter Template admin page), not a hardcoded placeholder company -->
+      <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 3px solid ${branding.accentColor}; padding-bottom: 15px; margin-bottom: 25px;">
         <div style="display:flex; align-items:center; gap:12px;">
           ${branding.logo ? `<img src="${branding.logo}" style="height:40px; width:auto; object-fit:contain;" />` : ""}
-          <div style="font-size: 20px; font-weight: 800; color: #1a56db; letter-spacing: 0.5px;">${branding.name}</div>
+          <div style="font-size: 20px; font-weight: 800; color: ${branding.accentColor}; letter-spacing: 0.5px;">${branding.name}</div>
         </div>
         <div style="text-align: right; font-size: 11px; color: #4b5563; line-height: 1.5;">
           <div>${branding.address}</div>
@@ -1139,7 +1170,7 @@ async function buildLetterHtml(letter) {
       <div style="line-height: 1.6; font-size: 14px; margin-bottom: 40px; color: #111827;">${letter.body}</div>
       <!-- SIGN-OFF -->
       <div style="margin-top: 40px; font-size: 14px;">
-        <div style="margin-bottom: ${letterHasVisibleSignature(letter) ? "8px" : "35px"};">Yours faithfully,</div>
+        <div style="margin-bottom: ${letterHasVisibleSignature(letter) ? "8px" : "35px"};">${branding.signOffText}</div>
         ${letterHasVisibleSignature(letter) ? `<div style="margin-bottom:6px;"><img src="${letter.sender.signatureImage}" style="height:50px; object-fit:contain;" /></div>` : ""}
         <div style="font-weight: bold; text-decoration: underline; min-width: 180px; display: inline-block;">${senderName}</div>
         ${senderPosition ? `<div style="color:#4b5563;font-size:12px;">${senderPosition}</div>` : ""}
@@ -1297,15 +1328,15 @@ exports.downloadLetterPdf = async (req, res, next) => {
         }
       }
     }
-    doc.fontSize(16).font("Helvetica-Bold").fillColor("#1a56db")
+    doc.fontSize(16).font(branding.pdfFont.pdfBold).fillColor(branding.accentColor)
       .text(branding.name, logoDrawn ? 90 : 50, 55, { width: logoDrawn ? 205 : 245 });
 
-    doc.fontSize(9).font("Helvetica").fillColor("#4b5563")
+    doc.fontSize(9).font(branding.pdfFont.pdfRegular).fillColor("#4b5563")
       .text(branding.address, 300, 50, { width: 245, align: "right" })
       .text(`Tel: ${branding.phone} | ${branding.email}`, 300, doc.y, { width: 245, align: "right" });
     doc.y = 90;
 
-    doc.moveTo(50, 118).lineTo(545, 118).strokeColor("#1a56db").lineWidth(3).stroke();
+    doc.moveTo(50, 118).lineTo(545, 118).strokeColor(branding.accentColor).lineWidth(3).stroke();
     doc.y = 130;
 
     // Ref / Date
@@ -1315,23 +1346,29 @@ exports.downloadLetterPdf = async (req, res, next) => {
     doc.moveDown(1.5);
 
     // To
-    doc.fillColor("#111827").fontSize(11).font("Helvetica-Bold")
+    doc.fillColor("#111827").fontSize(11).font(branding.pdfFont.pdfBold)
       .text(`To: ${recipientName}${recipientPosition ? ", " + recipientPosition : ""}`);
-    doc.font("Helvetica").fontSize(10).fillColor("#374151");
+    doc.font(branding.pdfFont.pdfRegular).fontSize(10).fillColor("#374151");
     if (recipientOrganization) doc.text(recipientOrganization);
     if (recipientEmail) doc.fillColor("#6b7280").text(recipientEmail);
     doc.moveDown();
 
     // Subject
-    doc.fillColor("#111827").fontSize(12).font("Helvetica-Bold").text(`Subject: ${letter.subject}`);
+    doc.fillColor("#111827").fontSize(12).font(branding.pdfFont.pdfBold).text(`Subject: ${letter.subject}`);
     if (letter.subTitle) {
-      doc.fontSize(10).font("Helvetica-BoldOblique").fillColor("#374151").text(letter.subTitle);
+      doc.fontSize(10).font(branding.pdfFont.pdfBoldItalic).fillColor("#374151").text(letter.subTitle);
     }
     doc.moveDown();
 
     // Body (stripping HTML tags for PDF Kit)
-    doc.font("Helvetica").fontSize(11).fillColor("#111827").text(stripHtml(letter.body), { align: "left", lineGap: 4 });
+    doc.font(branding.pdfFont.pdfRegular).fontSize(11).fillColor("#111827").text(stripHtml(letter.body), { align: "left", lineGap: 4 });
     doc.moveDown(3);
+
+    // Sign-off phrase — the HTML preview has always shown this; PDFKit
+    // never did, so the downloaded PDF and the preview disagreed. Now both
+    // read the same DB-configured phrase (default "Yours faithfully,").
+    doc.font(branding.pdfFont.pdfRegular).fontSize(11).fillColor("#111827").text(branding.signOffText);
+    doc.moveDown(letterHasVisibleSignature(letter) ? 0.3 : 2);
 
     // Sender — stamp the sender's stored signature image, if they have one
     // uploaded (Profile > Digital Signature) AND it's actually theirs to
@@ -1357,28 +1394,28 @@ exports.downloadLetterPdf = async (req, res, next) => {
         }
       }
     }
-    doc.fillColor("#111827").font("Helvetica-Bold").fontSize(11).text(senderName);
-    doc.font("Helvetica");
+    doc.fillColor("#111827").font(branding.pdfFont.pdfBold).fontSize(11).text(senderName);
+    doc.font(branding.pdfFont.pdfRegular);
     if (senderPosition) doc.fontSize(9).fillColor("#6b7280").text(senderPosition);
     if (senderOrganization) doc.fontSize(9).fillColor("#6b7280").text(senderOrganization);
     if (letter.createdBy && letter.senderId && letter.createdById !== letter.senderId) {
       doc.moveDown(0.3);
-      doc.fontSize(8).font("Helvetica-Oblique").fillColor("#9ca3af")
+      doc.fontSize(8).font(branding.pdfFont.pdfItalic).fillColor("#9ca3af")
         .text(`Prepared on behalf of ${senderName} by ${letter.createdBy.firstName} ${letter.createdBy.lastName}${!letterApprovalIsConsistent(letter) ? " — awaiting their signature" : ""}`);
     }
 
     if (letter.approvedById && letter.approvedBy && letterApprovalIsConsistent(letter)) {
       const signedName = `${letter.approvedBy.firstName || ""} ${letter.approvedBy.lastName || ""}`.trim();
       doc.moveDown(0.5);
-      doc.fontSize(8).font("Helvetica-Oblique").fillColor("#059669")
+      doc.fontSize(8).font(branding.pdfFont.pdfItalic).fillColor("#059669")
         .text(`✓ Digitally signed by ${signedName} on ${new Date(letter.approvedAt).toLocaleDateString("en-GB", { day: "2-digit", month: "long", year: "numeric" })}`);
     }
     doc.moveDown();
 
     // CC List at the bottom
     if (ccStakeholders.length) {
-      doc.fillColor("#111827").fontSize(10).font("Helvetica-Bold").text("CC:", { continued: false });
-      doc.font("Helvetica").fontSize(9).fillColor("#4b5563");
+      doc.fillColor("#111827").fontSize(10).font(branding.pdfFont.pdfBold).text("CC:", { continued: false });
+      doc.font(branding.pdfFont.pdfRegular).fontSize(9).fillColor("#4b5563");
       ccStakeholders.forEach((c) => {
         doc.text(`- ${c.name} (${c.email})`);
       });
@@ -1387,8 +1424,8 @@ exports.downloadLetterPdf = async (req, res, next) => {
     // Attachments at the bottom
     if (attachmentsList.length > 0) {
       doc.moveDown();
-      doc.fillColor("#111827").fontSize(10).font("Helvetica-Bold").text(`Attachments (${attachmentsList.length}):`, { continued: false });
-      doc.font("Helvetica").fontSize(9).fillColor("#1a56db");
+      doc.fillColor("#111827").fontSize(10).font(branding.pdfFont.pdfBold).text(`Attachments (${attachmentsList.length}):`, { continued: false });
+      doc.font(branding.pdfFont.pdfRegular).fontSize(9).fillColor(branding.accentColor);
       attachmentsList.forEach((att, idx) => {
         doc.text(`${idx + 1}. ${att.fileName || att.title}`);
       });
