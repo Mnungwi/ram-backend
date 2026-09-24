@@ -69,11 +69,19 @@ function buildLetterheadDict(dict) {
     signOffText: dict.letter_signoff_text || "Yours faithfully,",
     footerText: dict.letter_footer_text || `${name} — Official Document`,
     watermarkEnabled: dict.letter_watermark_enabled === "true",
+    watermarkType: dict.letter_watermark_type === "image" ? "image" : "text",
     watermarkText: dict.letter_watermark_text || name,
+    watermarkImage: dict.letter_watermark_image || null,
+    watermarkImageSize: parseInt(dict.letter_watermark_image_size, 10) || 80,
     watermarkColor: dict.letter_watermark_color || "#1a56db",
     watermarkOpacity: Math.min(1, Math.max(0, parseFloat(dict.letter_watermark_opacity)) || 0.08),
     watermarkRotation: Number.isFinite(parseFloat(dict.letter_watermark_rotation)) ? parseFloat(dict.letter_watermark_rotation) : -45,
     watermarkFontSize: parseInt(dict.letter_watermark_font_size, 10) || 60,
+    // Repeat = a tiled pattern of small watermarks covering the whole
+    // page (like a security paper print); off = one single centred mark
+    // (the original behaviour — stays the default so nothing changes
+    // until an admin opts in).
+    watermarkRepeat: dict.letter_watermark_repeat === "true",
   };
 }
 
@@ -107,21 +115,8 @@ function applyLetterheadFooterAndWatermark(doc, branding) {
     const pageWidth = doc.page.width;
     const pageHeight = doc.page.height;
 
-    if (branding.watermarkEnabled && branding.watermarkText) {
-      doc.save();
-      doc.font(branding.pdfFont.pdfBold).fontSize(branding.watermarkFontSize);
-      const textWidth = doc.widthOfString(branding.watermarkText);
-      doc.fillOpacity(branding.watermarkOpacity);
-      doc.fillColor(branding.watermarkColor);
-      // Rotate around the page centre, then draw centred on that same
-      // point (using its own measured width, not a fixed box) — a fixed
-      // `width` here would wrap long text onto several lines instead of
-      // one diagonal band.
-      doc.rotate(branding.watermarkRotation, { origin: [pageWidth / 2, pageHeight / 2] });
-      doc.text(branding.watermarkText, pageWidth / 2 - textWidth / 2, pageHeight / 2 - branding.watermarkFontSize / 2, {
-        lineBreak: false,
-      });
-      doc.restore();
+    if (branding.watermarkEnabled) {
+      drawPdfWatermark(doc, branding);
     }
 
     if (branding.footerText) {
@@ -136,6 +131,48 @@ function applyLetterheadFooterAndWatermark(doc, branding) {
   }
 }
 
+function escapeXml(str) {
+  return String(str).replace(/[<>&'"]/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", "'": "&apos;", '"': "&quot;" }[c]));
+}
+
+// Builds the watermark overlay for the HTML preview — one absolutely
+// positioned layer, rotated as a whole so a repeated pattern rotates
+// together (like a security-paper print) instead of each copy needing its
+// own rotation math. Text mode encodes the word once as a tiny inline SVG
+// and lets the CSS background-repeat tile it; image mode tiles the actual
+// picture. "Single" mode (the default) just centres one instance — same
+// visual as before this feature existed.
+function buildWatermarkHtml(branding) {
+  if (!branding.watermarkEnabled) return "";
+  const isImage = branding.watermarkType === "image" && branding.watermarkImage;
+  if (!isImage && !branding.watermarkText) return "";
+
+  const rotate = `rotate(${branding.watermarkRotation}deg)`;
+
+  if (isImage) {
+    const size = branding.watermarkImageSize;
+    if (branding.watermarkRepeat) {
+      return `<div style="position:absolute; inset:-75%; transform:${rotate}; opacity:${branding.watermarkOpacity}; pointer-events:none; z-index:0; background-image:url('${branding.watermarkImage}'); background-repeat:repeat; background-size:${size * 2}px ${size * 2}px;"></div>`;
+    }
+    return `<div style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center; pointer-events:none; overflow:hidden; z-index:0;">
+              <img src="${branding.watermarkImage}" style="width:${size}px; height:auto; transform:${rotate}; opacity:${branding.watermarkOpacity};" />
+            </div>`;
+  }
+
+  const fontSize = branding.watermarkFontSize;
+  if (branding.watermarkRepeat) {
+    const tileW = Math.max(220, branding.watermarkText.length * fontSize * 0.62) + fontSize * 2;
+    const tileH = fontSize * 3;
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${tileW}" height="${tileH}"><text x="${tileW / 2}" y="${tileH / 2 + fontSize * 0.35}" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-weight="800" font-size="${fontSize}" fill="${branding.watermarkColor}">${escapeXml(branding.watermarkText)}</text></svg>`;
+    const dataUri = `data:image/svg+xml,${encodeURIComponent(svg)}`;
+    return `<div style="position:absolute; inset:-75%; transform:${rotate}; opacity:${branding.watermarkOpacity}; pointer-events:none; z-index:0; background-image:url('${dataUri}'); background-repeat:repeat; background-size:${tileW}px ${tileH}px;"></div>`;
+  }
+
+  return `<div style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center; pointer-events:none; overflow:hidden; z-index:0;">
+            <span style="transform:${rotate}; font-size:${fontSize}px; font-weight:800; color:${branding.watermarkColor}; opacity:${branding.watermarkOpacity}; white-space:nowrap; font-family:Helvetica, Arial, sans-serif;">${branding.watermarkText}</span>
+          </div>`;
+}
+
 function resolveAttachmentPath(filePath) {
   if (!filePath) return null;
   let fullPath = path.join(LETTERS_DIR, filePath);
@@ -147,6 +184,69 @@ function resolveAttachmentPath(filePath) {
   fullPath = path.join(UPLOADS_ROOT, filePath);
   if (fs.existsSync(fullPath)) return fullPath;
   return null;
+}
+
+// Media-library pickers (logo, watermark image, ...) save the field as a
+// FULL absolute URL (SERVER_ORIGIN + "/uploads/media/xxx.jpg"), not a bare
+// relative path — strip the origin before handing it to
+// resolveAttachmentPath(), which looks the file up by its relative path
+// under uploads/. Also copes with an already-relative value.
+function resolveMediaFilePath(urlOrPath) {
+  if (!urlOrPath) return null;
+  const relative = String(urlOrPath).replace(/^https?:\/\/[^/]+/i, "");
+  return resolveAttachmentPath(relative.replace(/^\//, ""));
+}
+
+// PDFKit counterpart of buildWatermarkHtml() — same text/image × single/
+// repeat logic, drawn on the CURRENT page. Rotates the whole coordinate
+// system once around the page centre, then either draws one instance
+// there (single) or a grid of instances across an oversized virtual
+// canvas so rotated corners still stay covered (repeat).
+function drawPdfWatermark(doc, branding) {
+  const isImage = branding.watermarkType === "image" && branding.watermarkImage;
+  if (!isImage && !branding.watermarkText) return;
+
+  let imagePath = null;
+  if (isImage) {
+    imagePath = resolveMediaFilePath(branding.watermarkImage);
+    if (!imagePath) return; // file missing on disk — skip rather than throw
+  }
+
+  const pageWidth = doc.page.width;
+  const pageHeight = doc.page.height;
+
+  doc.save();
+  doc.opacity(branding.watermarkOpacity);
+  doc.rotate(branding.watermarkRotation, { origin: [pageWidth / 2, pageHeight / 2] });
+
+  const drawOne = (cx, cy) => {
+    if (isImage) {
+      const size = branding.watermarkImageSize;
+      try {
+        doc.image(imagePath, cx - size / 2, cy - size / 2, { width: size });
+      } catch (e) {
+        // corrupt/unsupported image — skip silently, text/rest of page is unaffected
+      }
+    } else {
+      doc.font(branding.pdfFont.pdfBold).fontSize(branding.watermarkFontSize).fillColor(branding.watermarkColor);
+      const w = doc.widthOfString(branding.watermarkText);
+      doc.text(branding.watermarkText, cx - w / 2, cy - branding.watermarkFontSize / 2, { lineBreak: false });
+    }
+  };
+
+  if (branding.watermarkRepeat) {
+    const unit = isImage ? branding.watermarkImageSize : branding.watermarkFontSize;
+    const step = unit * 2.4;
+    for (let y = -pageHeight * 0.5; y < pageHeight * 1.5; y += step) {
+      for (let x = -pageWidth * 0.5; x < pageWidth * 1.5; x += step) {
+        drawOne(x, y);
+      }
+    }
+  } else {
+    drawOne(pageWidth / 2, pageHeight / 2);
+  }
+
+  doc.restore();
 }
 
 
@@ -1123,11 +1223,7 @@ async function buildLetterHtml(letter) {
   // letter_signoff_text, letter_footer_text, letter_watermark_*) — so a
   // different client's letters can look completely different with zero
   // code changes. Watermark is off unless an admin has switched it on.
-  const watermarkHtml = branding.watermarkEnabled && branding.watermarkText
-    ? `<div style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center; pointer-events:none; overflow:hidden; z-index:0;">
-         <span style="transform:rotate(${branding.watermarkRotation}deg); font-size:${branding.watermarkFontSize}px; font-weight:800; color:${branding.watermarkColor}; opacity:${branding.watermarkOpacity}; white-space:nowrap; font-family:Helvetica, Arial, sans-serif;">${branding.watermarkText}</span>
-       </div>`
-    : "";
+  const watermarkHtml = buildWatermarkHtml(branding);
   const footerHtml = branding.footerText
     ? `<div style="margin-top:35px; padding-top:10px; border-top:1px solid #e5e7eb; font-size:10px; color:#9ca3af; text-align:center; position:relative; z-index:1;">${branding.footerText}</div>`
     : "";
@@ -1318,7 +1414,7 @@ exports.downloadLetterPdf = async (req, res, next) => {
     // ── LETTERHEAD — real, DB-driven company branding, not a hardcoded placeholder company ──
     let logoDrawn = false;
     if (branding.logo) {
-      const logoPath = resolveAttachmentPath(branding.logo.replace(/^\//, ""));
+      const logoPath = resolveMediaFilePath(branding.logo);
       if (logoPath) {
         try {
           doc.image(logoPath, 50, 45, { height: 32 });
