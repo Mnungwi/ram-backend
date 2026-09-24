@@ -56,13 +56,14 @@ const FONT_PRESETS = {
 function buildLetterheadDict(dict) {
   const name = dict.site_title || "United Ram Construction Company Limited";
   const fontKey = dict.letter_font_family === "sans" ? "sans" : "serif";
+  const accentColor = dict.letter_accent_color || "#1a56db";
   return {
     name,
     logo: dict.site_logo || null,
     address: dict.contact_address || "Mbweni, Zanzibar, Tanzania",
     phone: dict.contact_phone || "+255 777 412 337",
     email: dict.contact_email || "info@unitedram.com",
-    accentColor: dict.letter_accent_color || "#1a56db",
+    accentColor,
     fontFamily: fontKey,
     fontCss: FONT_PRESETS[fontKey].css,
     pdfFont: FONT_PRESETS[fontKey],
@@ -82,6 +83,27 @@ function buildLetterheadDict(dict) {
     // (the original behaviour — stays the default so nothing changes
     // until an admin opts in).
     watermarkRepeat: dict.letter_watermark_repeat === "true",
+
+    // Decorative page border (a coloured frame around the whole page,
+    // like a formal quotation/certificate layout). Off by default.
+    borderEnabled: dict.letter_border_enabled === "true",
+    borderColor: dict.letter_border_color || accentColor,
+    borderWidth: Math.max(0.5, parseFloat(dict.letter_border_width) || 2),
+
+    // Footer style: "simple" (one centred line — original behaviour) or
+    // "detailed" (a 3-column business-card style strip: phone / TIN+VAT+
+    // email+website / address, with a coloured bar under it).
+    footerStyle: dict.letter_footer_style === "detailed" ? "detailed" : "simple",
+    tinNumber: dict.letter_tin_number || "",
+    vatNumber: dict.letter_vat_number || "",
+    websiteUrl: dict.letter_website_url || "",
+
+    // Optional company stamp/seal image shown next to the signature —
+    // separate from the watermark (that covers the whole page; this is a
+    // small mark right by the sign-off, like a rubber stamp).
+    stampEnabled: dict.letter_stamp_enabled === "true",
+    stampImage: dict.letter_stamp_image || null,
+    stampSize: parseInt(dict.letter_stamp_size, 10) || 90,
   };
 }
 
@@ -108,26 +130,103 @@ async function getCompanyBranding() {
 // merged afterwards via pdf-lib are untouched.
 function applyLetterheadFooterAndWatermark(doc, branding) {
   const range = doc.bufferedPageRange();
-  const marginX = doc.page.margins.left;
 
   for (let i = range.start; i < range.start + range.count; i++) {
     doc.switchToPage(i);
-    const pageWidth = doc.page.width;
-    const pageHeight = doc.page.height;
 
     if (branding.watermarkEnabled) {
       drawPdfWatermark(doc, branding);
     }
+    drawPdfPageBorder(doc, branding);
+    drawPdfFooter(doc, branding, i - range.start + 1, range.count);
+  }
+}
 
-    if (branding.footerText) {
-      const footerY = pageHeight - doc.page.margins.bottom + 12;
-      doc.fillOpacity(1).fillColor("#9ca3af").font(branding.pdfFont.pdfRegular).fontSize(7.5);
-      doc.text(branding.footerText, marginX, footerY, { width: pageWidth - marginX * 2 - 70, align: "left" });
-      doc.text(`Page ${i - range.start + 1} of ${range.count}`, pageWidth - marginX - 70, footerY, {
-        width: 70,
-        align: "right",
-      });
+// A decorative frame around the whole page, like a formal quotation /
+// certificate layout. Off by default — purely cosmetic, never affects
+// content flow since it's drawn well inside PDFKit's own margins.
+function drawPdfPageBorder(doc, branding) {
+  if (!branding.borderEnabled) return;
+  const inset = 14;
+  doc.save();
+  doc.lineWidth(branding.borderWidth).strokeColor(branding.borderColor);
+  doc.rect(inset, inset, doc.page.width - inset * 2, doc.page.height - inset * 2).stroke();
+  doc.restore();
+}
+
+// "simple" = one centred line (the original, still the default).
+// "detailed" = a 3-column business-strip footer (phone / TIN+VAT+email+
+// website / address) with a coloured bar under it, matching a formal
+// quotation-letter layout.
+function drawPdfFooter(doc, branding, pageNumber, totalPages) {
+  const pageWidth = doc.page.width;
+  const pageHeight = doc.page.height;
+  const marginX = doc.page.margins.left;
+  const realBottomMargin = doc.page.margins.bottom;
+
+  // The footer is drawn INSIDE the bottom margin band by design — but
+  // PDFKit auto-inserts a whole new page the moment any .text() call
+  // lands past page.maxY() (== page.height - margins.bottom), even with
+  // explicit x/y coordinates. Zeroing the bottom margin for the duration
+  // of this draw raises maxY() to the full page height so the footer no
+  // longer looks like an overflow, and it's restored immediately after so
+  // normal body-content pagination for the NEXT page is unaffected.
+  doc.page.margins.bottom = 0;
+  try {
+    if (branding.footerStyle === "detailed") {
+      const barHeight = 5;
+      doc.save();
+      doc.rect(0, pageHeight - barHeight, pageWidth, barHeight).fill(branding.accentColor);
+      doc.restore();
+
+      const footerTop = pageHeight - realBottomMargin + 6;
+      doc.moveTo(marginX, footerTop - 8).lineTo(pageWidth - marginX, footerTop - 8)
+        .strokeColor("#e5e7eb").lineWidth(0.75).stroke();
+
+      const colWidth = (pageWidth - marginX * 2) / 3;
+      doc.fillOpacity(1);
+
+      // Column 1 — phone
+      doc.font(branding.pdfFont.pdfBold).fontSize(7).fillColor(branding.accentColor)
+        .text("Tel: ", marginX, footerTop, { continued: true, width: colWidth - 4, lineBreak: false })
+        .font(branding.pdfFont.pdfRegular).fillColor("#374151")
+        .text(branding.phone || "", { lineBreak: false });
+
+      // Column 2 — TIN/VAT, email, website
+      let y2 = footerTop;
+      doc.font(branding.pdfFont.pdfRegular).fontSize(7).fillColor("#374151");
+      const idParts = [branding.tinNumber ? `TIN: ${branding.tinNumber}` : "", branding.vatNumber ? `VAT: ${branding.vatNumber}` : ""].filter(Boolean);
+      if (idParts.length) {
+        doc.text(idParts.join("   "), marginX + colWidth, y2, { width: colWidth - 4 });
+        y2 = doc.y;
+      }
+      if (branding.email) {
+        doc.text(branding.email, marginX + colWidth, y2, { width: colWidth - 4 });
+        y2 = doc.y;
+      }
+      if (branding.websiteUrl) {
+        doc.text(branding.websiteUrl, marginX + colWidth, y2, { width: colWidth - 4 });
+      }
+
+      // Column 3 — address
+      doc.font(branding.pdfFont.pdfRegular).fontSize(7).fillColor("#374151")
+        .text(branding.address || "", marginX + colWidth * 2, footerTop, { width: colWidth - 4, align: "right" });
+
+      doc.fontSize(6.5).fillColor("#9ca3af")
+        .text(`Page ${pageNumber} of ${totalPages}`, marginX, pageHeight - barHeight - 9, { width: pageWidth - marginX * 2, align: "center" });
+      return;
     }
+
+    if (!branding.footerText) return;
+    const footerY = pageHeight - realBottomMargin + 12;
+    doc.fillOpacity(1).fillColor("#9ca3af").font(branding.pdfFont.pdfRegular).fontSize(7.5);
+    doc.text(branding.footerText, marginX, footerY, { width: pageWidth - marginX * 2 - 70, align: "left" });
+    doc.text(`Page ${pageNumber} of ${totalPages}`, pageWidth - marginX - 70, footerY, {
+      width: 70,
+      align: "right",
+    });
+  } finally {
+    doc.page.margins.bottom = realBottomMargin;
   }
 }
 
@@ -171,6 +270,35 @@ function buildWatermarkHtml(branding) {
   return `<div style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center; pointer-events:none; overflow:hidden; z-index:0;">
             <span style="transform:${rotate}; font-size:${fontSize}px; font-weight:800; color:${branding.watermarkColor}; opacity:${branding.watermarkOpacity}; white-space:nowrap; font-family:Helvetica, Arial, sans-serif;">${branding.watermarkText}</span>
           </div>`;
+}
+
+// "simple" = one centred line (default, unchanged from before this
+// feature). "detailed" = a 3-column business-strip footer (phone / TIN+
+// VAT+email+website / address) with a coloured bar under it, matching a
+// formal quotation-letter layout.
+function buildFooterHtml(branding) {
+  if (branding.footerStyle === "detailed") {
+    const idParts = [
+      branding.tinNumber ? `TIN: ${branding.tinNumber}` : "",
+      branding.vatNumber ? `VAT: ${branding.vatNumber}` : "",
+    ].filter(Boolean).join(" &nbsp; ");
+    return `
+      <div style="margin-top:35px; padding-top:10px; border-top:1px solid #e5e7eb; position:relative; z-index:1;">
+        <div style="display:flex; justify-content:space-between; gap:16px; font-size:9.5px; color:#374151;">
+          <div style="flex:1;"><strong style="color:${branding.accentColor};">Tel:</strong> ${branding.phone || ""}</div>
+          <div style="flex:1; text-align:center;">
+            ${idParts ? `<div>${idParts}</div>` : ""}
+            ${branding.email ? `<div>${branding.email}</div>` : ""}
+            ${branding.websiteUrl ? `<div>${branding.websiteUrl}</div>` : ""}
+          </div>
+          <div style="flex:1; text-align:right;">${branding.address || ""}</div>
+        </div>
+      </div>
+      <div style="height:5px; background:${branding.accentColor}; margin:10px -40px -40px -40px; position:relative; z-index:1;"></div>
+    `;
+  }
+  if (!branding.footerText) return "";
+  return `<div style="margin-top:35px; padding-top:10px; border-top:1px solid #e5e7eb; font-size:10px; color:#9ca3af; text-align:center; position:relative; z-index:1;">${branding.footerText}</div>`;
 }
 
 function resolveAttachmentPath(filePath) {
@@ -1224,12 +1352,13 @@ async function buildLetterHtml(letter) {
   // different client's letters can look completely different with zero
   // code changes. Watermark is off unless an admin has switched it on.
   const watermarkHtml = buildWatermarkHtml(branding);
-  const footerHtml = branding.footerText
-    ? `<div style="margin-top:35px; padding-top:10px; border-top:1px solid #e5e7eb; font-size:10px; color:#9ca3af; text-align:center; position:relative; z-index:1;">${branding.footerText}</div>`
-    : "";
+  const footerHtml = buildFooterHtml(branding);
+  const borderCss = branding.borderEnabled
+    ? `${branding.borderWidth}px solid ${branding.borderColor}`
+    : "1px solid #e5e7eb";
 
   return `
-    <div style="position:relative; overflow:hidden; font-family: ${branding.fontCss}; max-width: 800px; margin: 0 auto; padding: 40px; border: 1px solid #e5e7eb; background: #fff; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); color: #111827;">
+    <div style="position:relative; overflow:hidden; font-family: ${branding.fontCss}; max-width: 800px; margin: 0 auto; padding: 40px; border: ${borderCss}; background: #fff; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); color: #111827;">
       ${watermarkHtml}
       <div style="position:relative; z-index:1;">
       <!-- LETTERHEAD — real, DB-driven company branding & format (Letters > Letter Template admin page), not a hardcoded placeholder company -->
@@ -1264,23 +1393,26 @@ async function buildLetterHtml(letter) {
       </div>
       <!-- BODY -->
       <div style="line-height: 1.6; font-size: 14px; margin-bottom: 40px; color: #111827;">${letter.body}</div>
-      <!-- SIGN-OFF -->
-      <div style="margin-top: 40px; font-size: 14px;">
-        <div style="margin-bottom: ${letterHasVisibleSignature(letter) ? "8px" : "35px"};">${branding.signOffText}</div>
-        ${letterHasVisibleSignature(letter) ? `<div style="margin-bottom:6px;"><img src="${letter.sender.signatureImage}" style="height:50px; object-fit:contain;" /></div>` : ""}
-        <div style="font-weight: bold; text-decoration: underline; min-width: 180px; display: inline-block;">${senderName}</div>
-        ${senderPosition ? `<div style="color:#4b5563;font-size:12px;">${senderPosition}</div>` : ""}
-        ${senderOrganization ? `<div style="color:#4b5563;font-size:12px;">${senderOrganization}</div>` : ""}
-        ${letter.createdBy && letter.senderId && letter.createdById !== letter.senderId ? `
-          <div style="margin-top:6px; font-size:10px; color:#9ca3af; font-style:italic;">
-            Prepared on behalf of ${senderName} by ${letter.createdBy.firstName} ${letter.createdBy.lastName}${!letterApprovalIsConsistent(letter) ? " — awaiting their signature" : ""}
-          </div>
-        ` : ""}
-        ${letter.approvedById && letter.approvedBy && letterApprovalIsConsistent(letter) ? `
-          <div style="margin-top:10px; font-size:11px; color:#059669; font-style:italic;">
-            ✓ Digitally signed by ${letter.approvedBy.firstName} ${letter.approvedBy.lastName} on ${new Date(letter.approvedAt).toLocaleDateString("en-GB", { day: "2-digit", month: "long", year: "numeric" })}
-          </div>
-        ` : ""}
+      <!-- SIGN-OFF (+ optional company stamp/seal beside it) -->
+      <div style="margin-top: 40px; font-size: 14px; display:flex; justify-content:space-between; align-items:flex-end; gap:20px;">
+        <div>
+          <div style="margin-bottom: ${letterHasVisibleSignature(letter) ? "8px" : "35px"};">${branding.signOffText}</div>
+          ${letterHasVisibleSignature(letter) ? `<div style="margin-bottom:6px;"><img src="${letter.sender.signatureImage}" style="height:50px; object-fit:contain;" /></div>` : ""}
+          <div style="font-weight: bold; text-decoration: underline; min-width: 180px; display: inline-block;">${senderName}</div>
+          ${senderPosition ? `<div style="color:#4b5563;font-size:12px;">${senderPosition}</div>` : ""}
+          ${senderOrganization ? `<div style="color:#4b5563;font-size:12px;">${senderOrganization}</div>` : ""}
+          ${letter.createdBy && letter.senderId && letter.createdById !== letter.senderId ? `
+            <div style="margin-top:6px; font-size:10px; color:#9ca3af; font-style:italic;">
+              Prepared on behalf of ${senderName} by ${letter.createdBy.firstName} ${letter.createdBy.lastName}${!letterApprovalIsConsistent(letter) ? " — awaiting their signature" : ""}
+            </div>
+          ` : ""}
+          ${letter.approvedById && letter.approvedBy && letterApprovalIsConsistent(letter) ? `
+            <div style="margin-top:10px; font-size:11px; color:#059669; font-style:italic;">
+              ✓ Digitally signed by ${letter.approvedBy.firstName} ${letter.approvedBy.lastName} on ${new Date(letter.approvedAt).toLocaleDateString("en-GB", { day: "2-digit", month: "long", year: "numeric" })}
+            </div>
+          ` : ""}
+        </div>
+        ${branding.stampEnabled && branding.stampImage ? `<img src="${branding.stampImage}" style="width:${branding.stampSize}px; height:auto; object-fit:contain; flex-shrink:0;" />` : ""}
       </div>
       <!-- CC -->
       ${
@@ -1465,6 +1597,21 @@ exports.downloadLetterPdf = async (req, res, next) => {
     // read the same DB-configured phrase (default "Yours faithfully,").
     doc.font(branding.pdfFont.pdfRegular).fontSize(11).fillColor("#111827").text(branding.signOffText);
     doc.moveDown(letterHasVisibleSignature(letter) ? 0.3 : 2);
+
+    // Optional company stamp/seal, placed to the right of the sign-off
+    // block — independent of the flowing cursor (doc.y untouched) so it
+    // never disturbs the signature/name/title text beside it.
+    if (branding.stampEnabled && branding.stampImage) {
+      const stampPath = resolveMediaFilePath(branding.stampImage);
+      if (stampPath) {
+        try {
+          const size = branding.stampSize;
+          doc.image(stampPath, doc.page.width - doc.page.margins.right - size, doc.y - 10, { width: size });
+        } catch (e) {
+          // corrupt/unsupported image — skip silently
+        }
+      }
+    }
 
     // Sender — stamp the sender's stored signature image, if they have one
     // uploaded (Profile > Digital Signature) AND it's actually theirs to
