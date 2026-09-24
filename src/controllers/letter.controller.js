@@ -25,30 +25,86 @@ const { Op } = require("sequelize");
 // runs on every preview/download and rarely changes.
 let brandingCache = null;
 let brandingCacheAt = 0;
+// Letter footer text + watermark are configured the same way (Website
+// Content admin > Branding & Contact Info > "Letter Footer & Watermark"),
+// stored as more website_settings keys: letter_footer_text,
+// letter_watermark_enabled/_text/_color/_opacity/_rotation/_font_size.
+// Watermark defaults to OFF until an admin explicitly turns it on.
+function buildLetterheadDict(dict) {
+  const name = dict.site_title || "United Ram Construction Company Limited";
+  return {
+    name,
+    logo: dict.site_logo || null,
+    address: dict.contact_address || "Mbweni, Zanzibar, Tanzania",
+    phone: dict.contact_phone || "+255 777 412 337",
+    email: dict.contact_email || "info@unitedram.com",
+    footerText: dict.letter_footer_text || `${name} — Official Document`,
+    watermarkEnabled: dict.letter_watermark_enabled === "true",
+    watermarkText: dict.letter_watermark_text || name,
+    watermarkColor: dict.letter_watermark_color || "#1a56db",
+    watermarkOpacity: Math.min(1, Math.max(0, parseFloat(dict.letter_watermark_opacity)) || 0.08),
+    watermarkRotation: Number.isFinite(parseFloat(dict.letter_watermark_rotation)) ? parseFloat(dict.letter_watermark_rotation) : -45,
+    watermarkFontSize: parseInt(dict.letter_watermark_font_size, 10) || 60,
+  };
+}
+
 async function getCompanyBranding() {
   if (brandingCache && Date.now() - brandingCacheAt < 60000) return brandingCache;
   try {
     const [rows] = await sequelize.query("SELECT `key`, `value` FROM website_settings");
     const dict = {};
     for (const row of rows) dict[row.key] = row.value;
-    brandingCache = {
-      name: dict.site_title || "United Ram Construction Company Limited",
-      logo: dict.site_logo || null,
-      address: dict.contact_address || "Mbweni, Zanzibar, Tanzania",
-      phone: dict.contact_phone || "+255 777 412 337",
-      email: dict.contact_email || "info@unitedram.com",
-    };
+    brandingCache = buildLetterheadDict(dict);
     brandingCacheAt = Date.now();
   } catch (e) {
-    brandingCache = {
-      name: "United Ram Construction Company Limited",
-      logo: null,
-      address: "Mbweni, Zanzibar, Tanzania",
-      phone: "+255 777 412 337",
-      email: "info@unitedram.com",
-    };
+    brandingCache = buildLetterheadDict({});
   }
   return brandingCache;
+}
+
+// Stamps the DB-configured footer line (+ page number) and, if enabled, a
+// faint rotated watermark on every page of the PDFKit document generated so
+// far. Requires `new PDFDocument({..., bufferPages: true})` — call this once,
+// right before doc.end(), after all letter content has been written (page
+// count isn't known until then). Only touches PDFKit's own pages (the
+// letter body + any embedded raster attachment pages); PDF attachments
+// merged afterwards via pdf-lib are untouched.
+function applyLetterheadFooterAndWatermark(doc, branding) {
+  const range = doc.bufferedPageRange();
+  const marginX = doc.page.margins.left;
+
+  for (let i = range.start; i < range.start + range.count; i++) {
+    doc.switchToPage(i);
+    const pageWidth = doc.page.width;
+    const pageHeight = doc.page.height;
+
+    if (branding.watermarkEnabled && branding.watermarkText) {
+      doc.save();
+      doc.font("Helvetica-Bold").fontSize(branding.watermarkFontSize);
+      const textWidth = doc.widthOfString(branding.watermarkText);
+      doc.fillOpacity(branding.watermarkOpacity);
+      doc.fillColor(branding.watermarkColor);
+      // Rotate around the page centre, then draw centred on that same
+      // point (using its own measured width, not a fixed box) — a fixed
+      // `width` here would wrap long text onto several lines instead of
+      // one diagonal band.
+      doc.rotate(branding.watermarkRotation, { origin: [pageWidth / 2, pageHeight / 2] });
+      doc.text(branding.watermarkText, pageWidth / 2 - textWidth / 2, pageHeight / 2 - branding.watermarkFontSize / 2, {
+        lineBreak: false,
+      });
+      doc.restore();
+    }
+
+    if (branding.footerText) {
+      const footerY = pageHeight - doc.page.margins.bottom + 12;
+      doc.fillOpacity(1).fillColor("#9ca3af").font("Helvetica").fontSize(7.5);
+      doc.text(branding.footerText, marginX, footerY, { width: pageWidth - marginX * 2 - 70, align: "left" });
+      doc.text(`Page ${i - range.start + 1} of ${range.count}`, pageWidth - marginX - 70, footerY, {
+        width: 70,
+        align: "right",
+      });
+    }
+  }
 }
 
 function resolveAttachmentPath(filePath) {
@@ -1032,8 +1088,23 @@ async function buildLetterHtml(letter) {
     `;
   }
 
+  // Watermark + footer are configured in Website Content > Branding &
+  // Contact Info > "Letter Footer & Watermark" (website_settings keys
+  // letter_watermark_* / letter_footer_text). Watermark is off unless an
+  // admin has switched it on.
+  const watermarkHtml = branding.watermarkEnabled && branding.watermarkText
+    ? `<div style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center; pointer-events:none; overflow:hidden; z-index:0;">
+         <span style="transform:rotate(${branding.watermarkRotation}deg); font-size:${branding.watermarkFontSize}px; font-weight:800; color:${branding.watermarkColor}; opacity:${branding.watermarkOpacity}; white-space:nowrap; font-family:Helvetica, Arial, sans-serif;">${branding.watermarkText}</span>
+       </div>`
+    : "";
+  const footerHtml = branding.footerText
+    ? `<div style="margin-top:35px; padding-top:10px; border-top:1px solid #e5e7eb; font-size:10px; color:#9ca3af; text-align:center; position:relative; z-index:1;">${branding.footerText}</div>`
+    : "";
+
   return `
-    <div style="font-family: 'Times New Roman', Times, serif; max-width: 800px; margin: 0 auto; padding: 40px; border: 1px solid #e5e7eb; background: #fff; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); color: #111827;">
+    <div style="position:relative; overflow:hidden; font-family: 'Times New Roman', Times, serif; max-width: 800px; margin: 0 auto; padding: 40px; border: 1px solid #e5e7eb; background: #fff; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); color: #111827;">
+      ${watermarkHtml}
+      <div style="position:relative; z-index:1;">
       <!-- LETTERHEAD — real, DB-driven company branding (Website Content > Branding & Contact Info), not a hardcoded placeholder company -->
       <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 3px solid #1a56db; padding-bottom: 15px; margin-bottom: 25px;">
         <div style="display:flex; align-items:center; gap:12px;">
@@ -1092,6 +1163,8 @@ async function buildLetterHtml(letter) {
       }
       <!-- Attachments -->
       ${attachmentsHtml}
+      ${footerHtml}
+      </div>
     </div>
   `;
 }
@@ -1170,7 +1243,7 @@ exports.downloadLetterPdf = async (req, res, next) => {
     // Use application/octet-stream and omit Content-Disposition to bypass IDM extension hijacking on AJAX requests
     res.setHeader("Content-Type", "application/octet-stream");
 
-    const doc = new PDFDocument({ margin: 50 });
+    const doc = new PDFDocument({ margin: 50, bufferPages: true });
     const chunks = [];
     doc.on("data", (chunk) => chunks.push(chunk));
     doc.on("end", async () => {
@@ -1332,6 +1405,7 @@ exports.downloadLetterPdf = async (req, res, next) => {
       }
     }
 
+    applyLetterheadFooterAndWatermark(doc, branding);
     doc.end();
   } catch (err) {
     next(err);
